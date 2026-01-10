@@ -1,6 +1,3 @@
-#TODO: WiFi 이름, 비밀번호, 서버주소, 포트 등 파일로 분리하여 관리
-
-
 #include <M5Unified.h>
 #include <WiFi.h>
 #include <math.h>
@@ -69,20 +66,34 @@ static void sendPacket(uint8_t type, const uint8_t* payload, uint16_t len) {
   if (len && payload) client.write(payload, len);
 }
 
-static void ensureConnections() {
-  if (WiFi.status() != WL_CONNECTED) {
-    WiFi.disconnect(true);
-    WiFi.begin(SSID, PASS);
+static unsigned long last_connect_attempt = 0;
+static constexpr unsigned long CONNECT_INTERVAL_MS = 5000;
 
-    uint32_t t0 = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - t0 < 8000) delay(100);
+static void manageConnections() {
+  // 1. Check WiFi
+  if (WiFi.status() != WL_CONNECTED) {
+    if (millis() - last_connect_attempt > CONNECT_INTERVAL_MS) {
+      Serial.println("📡 Connecting to WiFi...");
+      WiFi.disconnect();
+      WiFi.reconnect();
+      last_connect_attempt = millis();
+    }
+    return;
   }
 
-  if (WiFi.status() == WL_CONNECTED && !client.connected()) {
-    client.stop();
-    if (client.connect(SERVER_IP, SERVER_PORT)) {
-      client.setNoDelay(true);
-      Serial.println("✅ server re-connected");
+  // 2. Check Server
+  if (!client.connected()) {
+    if (millis() - last_connect_attempt > CONNECT_INTERVAL_MS) {
+      Serial.printf("🔌 Connecting to Server %s:%d ...\n", SERVER_IP, SERVER_PORT);
+      if (client.connect(SERVER_IP, SERVER_PORT)) {
+        client.setNoDelay(true);
+        Serial.println("✅ Server Connected!");
+        // Send a ping immediately to register
+        sendPacket(PTYPE_PING, nullptr, 0);
+      } else {
+        Serial.println("❌ Server Connect Failed");
+      }
+      last_connect_attempt = millis();
     }
   }
 }
@@ -326,20 +337,30 @@ void setup() {
 
   Serial.begin(115200);
 
+  delay(1000); // Stabilize power
+  Serial.println("\n=== SYSTEM BOOT ===");
+
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);
   WiFi.setAutoReconnect(true);
-
   WiFi.begin(SSID, PASS);
-  while (WiFi.status() != WL_CONNECTED) { delay(200); Serial.print("."); }
-  Serial.println("\nWiFi connected");
 
-  if (client.connect(SERVER_IP, SERVER_PORT)) {
-    client.setNoDelay(true);
-    Serial.println("✅ server connected");
-  } else {
-    Serial.println("❌ server connect failed");
+  // Initial wait for WiFi (Blocking is OK here in setup)
+  Serial.print("Connecting access point");
+  uint32_t t0 = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - t0 < 10000) {
+     delay(500); 
+     Serial.print("."); 
   }
+  
+  if (WiFi.status() == WL_CONNECTED) {
+     Serial.println("\n✅ WiFi Connected!");
+  } else {
+     Serial.println("\n⚠️ WiFi Not Connected (will retry in loop)");
+  }
+
+  // Server connect will be handled in loop
+
 
   // Servo Init
   myServo.setPeriodHertz(50);
@@ -348,7 +369,8 @@ void setup() {
 }
 
 void loop() {
-  ensureConnections();
+  manageConnections();
+
 
   // ✅ (추가) 서버에서 오는 CMD 먼저 읽어서 출력
   pollServerPackets();

@@ -420,14 +420,25 @@ def main():
 
     while True:
         log.info("ready for next connection...")
-        conn, addr = srv.accept()
+        try:
+            conn, addr = srv.accept()
+        except KeyboardInterrupt:
+            break
+        except Exception as e:
+            log.error(f"accept failed: {e}")
+            time.sleep(1)
+            continue
+            
         try:
             handle_connection(conn, addr)
         except Exception as e:
-            log.exception(f"connection error: {e}")
+            log.exception(f"connection handler error: {e}")
         finally:
             try: conn.close()
             except Exception: pass
+            log.info(f"🔌 disconnected: {addr}")
+            # Ensure we don't spin too fast if something is broken
+            time.sleep(0.1)
 
 if __name__ == "__main__":
     main()

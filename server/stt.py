@@ -59,13 +59,23 @@ def clamp(v, lo, hi): return max(lo, min(hi, v))
 
 def recv_exact(conn, n: int):
     buf = b""
+    timeout_count = 0
+    max_timeouts = 10  # 최대 10번 타임아웃 (5초) 후 연결 종료로 간주
     while len(buf) < n:
         try:
             chunk = conn.recv(n - len(buf))
         except socket.timeout:
+            timeout_count += 1
+            if timeout_count >= max_timeouts:
+                log.warning("Too many timeouts in recv_exact - connection may be dead")
+                return None
             continue
+        except (ConnectionResetError, ConnectionAbortedError, OSError) as e:
+            log.warning(f"Connection error in recv_exact: {e}")
+            return None
         if not chunk:
             return None
+        timeout_count = 0  # 성공 시 타임아웃 카운터 리셋
         buf += chunk
     return buf
 
@@ -78,37 +88,30 @@ def send_packet(conn, ptype: int, payload: bytes = b"", lock=None) -> bool:
              # If audio is larger, we should split it.
              pass 
 
-        if lock:
-            with lock:
-                # If payload > 65k, we might need a loop, but let's assume caller chunks or we chunk here.
-                # Just simplified chunking for safety:
-                offset = 0
-                total = len(payload)
-                if total == 0:
-                     conn.sendall(struct.pack("<BH", ptype & 0xFF, 0))
-                     return True
-                
-                while offset < total:
-                    chunk_size = min(total - offset, 60000) # safe margin under 65535
-                    chunk = payload[offset:offset+chunk_size]
-                    header = struct.pack("<BH", ptype & 0xFF, len(chunk))
-                    conn.sendall(header + chunk)
-                    offset += chunk_size
-        else:
-            # Same logic without lock
+        def _send():
             offset = 0
             total = len(payload)
             if total == 0:
-                    conn.sendall(struct.pack("<BH", ptype & 0xFF, 0))
-                    return True
+                conn.sendall(struct.pack("<BH", ptype & 0xFF, 0))
+                return True
+            
             while offset < total:
-                chunk_size = min(total - offset, 60000)
+                chunk_size = min(total - offset, 60000) # safe margin under 65535
                 chunk = payload[offset:offset+chunk_size]
                 header = struct.pack("<BH", ptype & 0xFF, len(chunk))
                 conn.sendall(header + chunk)
                 offset += chunk_size
+            return True
 
-        return True
+        if lock:
+            with lock:
+                return _send()
+        else:
+            return _send()
+
+    except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError, OSError) as e:
+        log.warning(f"send_packet connection error ptype=0x{ptype:02X}: {e}")
+        return False
     except Exception as e:
         log.warning(f"send_packet failed ptype=0x{ptype:02X}: {e}")
         return False

@@ -26,7 +26,10 @@ static void sendPingIfIdle() { // 패킷 전송
   if (!client.connected()) return; // 클라이언트가 연결되어 있지 않으면 리턴
   uint32_t now = millis();
   if (now - last_ping_ms >= 3000) {   // 3초마다
-    sendPacket(PTYPE_PING, nullptr, 0);
+    if (!sendPacket(PTYPE_PING, nullptr, 0)) {
+      Serial.println("❌ Ping failed - connection lost");
+      return;
+    }
     last_ping_ms = now;
   }
 }
@@ -58,14 +61,35 @@ static uint32_t silence_samples = 0;
 static uint8_t  start_hit = 0;
 
 // ===== Packet TX =====
-static void sendPacket(uint8_t type, const uint8_t* payload, uint16_t len) {
-  if (!client.connected()) return;
-  client.write(&type, 1);
+static bool sendPacket(uint8_t type, const uint8_t* payload, uint16_t len) {
+  if (!client.connected()) return false;
+  
+  // 실제 전송 성공 여부 확인
+  size_t written = client.write(&type, 1);
+  if (written != 1) {
+    Serial.println("⚠️ Write failed (type)");
+    client.stop();
+    return false;
+  }
 
   uint8_t le[2] = { (uint8_t)(len & 0xFF), (uint8_t)((len >> 8) & 0xFF) };
-  client.write(le, 2);
+  written = client.write(le, 2);
+  if (written != 2) {
+    Serial.println("⚠️ Write failed (len)");
+    client.stop();
+    return false;
+  }
 
-  if (len && payload) client.write(payload, len);
+  if (len && payload) {
+    written = client.write(payload, len);
+    if (written != len) {
+      Serial.println("⚠️ Write failed (payload)");
+      client.stop();
+      return false;
+    }
+  }
+  
+  return true;
 }
 
 static unsigned long last_connect_attempt = 0;
@@ -129,7 +153,9 @@ static void send_preroll() {
   }
 
   size_t tail = PREROLL_SAMPLES - preroll_pos;
-  sendPacket(0x02, (uint8_t*)(preroll_buf + preroll_pos), (uint16_t)(tail * sizeof(int16_t)));
+  if (!sendPacket(0x02, (uint8_t*)(preroll_buf + preroll_pos), (uint16_t)(tail * sizeof(int16_t)))) {
+    return;
+  }
   if (preroll_pos > 0) {
     sendPacket(0x02, (uint8_t*)preroll_buf, (uint16_t)(preroll_pos * sizeof(int16_t)));
   }
@@ -282,9 +308,22 @@ static void pollServerPackets() {
   if (!client.connected()) return;
 
   // non-blocking: available 만큼만 먹고 빠짐
+  // 연결 상태 확인: available()이 0이어도 연결이 끊어졌는지 확인
+  if (client.available() == 0) {
+    // 연결이 끊어졌는지 확인하기 위해 peek() 시도
+    // peek()는 데이터가 없으면 -1을 반환하지만, 연결이 끊어지면 0을 반환할 수 있음
+    // 더 정확한 방법: 마지막으로 데이터를 받은 시간을 추적
+    return;
+  }
+  
   while (client.available() > 0) {
     int b = client.read();
-    if (b < 0) break;
+    if (b < 0) {
+      // 읽기 실패 시 연결 종료
+      Serial.println("⚠️ Read failed - connection lost");
+      client.stop();
+      break;
+    }
 
     uint8_t byte = (uint8_t)b;
 
@@ -326,14 +365,14 @@ static void pollServerPackets() {
              
              if ((rx_pos % AUDIO_CHUNK_MAX) == 0) {
                  // Buffer full, play it
-                 M5.Speaker.playRaw((const int16_t*)rx_audio_buf, AUDIO_CHUNK_MAX/2, SR, false, 1, false);
+                 M5.Speaker.playRaw((const int16_t*)rx_audio_buf, AUDIO_CHUNK_MAX/2, SR, false, 1.0, false);
              }
              
              if (rx_pos >= rx_len) {
                  // Flush remaining
                  size_t rem = rx_pos % AUDIO_CHUNK_MAX;
                  if (rem > 0) {
-                     M5.Speaker.playRaw((const int16_t*)rx_audio_buf, rem/2, SR, false, 1, false);
+                     M5.Speaker.playRaw((const int16_t*)rx_audio_buf, rem/2, SR, false, 1.0, false);
                  }
                  rx_stage = RX_TYPE;
              }
@@ -364,6 +403,9 @@ void setup() {
   cfg.internal_spk = true; // Speaker Enabled
   M5.begin(cfg);
 
+  // Set speaker volume to maximum
+  M5.Speaker.setVolume(255);
+
   M5.Mic.setSampleRate(SR);
 
   Serial.begin(115200);
@@ -388,9 +430,9 @@ void setup() {
      Serial.println("\n✅ WiFi Connected!");
   } else {
      Serial.println("\n⚠️ WiFi Not Connected (will retry in loop)");
+  }
   
   // Server connect will be handled in loop
-
 
   // Servo Init
   myServo.setPeriodHertz(50);
@@ -438,10 +480,18 @@ void loop() {
         silence_samples = 0;
 
         Serial.println("🎙️ START");
-        sendPacket(0x01, nullptr, 0);
+        if (!sendPacket(0x01, nullptr, 0)) {
+          state = IDLE;
+          start_hit = 0;
+          return;
+        }
 
         send_preroll();
-        sendPacket(0x02, (uint8_t*)samples, (uint16_t)(FRAME * sizeof(int16_t)));
+        if (!sendPacket(0x02, (uint8_t*)samples, (uint16_t)(FRAME * sizeof(int16_t)))) {
+          state = IDLE;
+          start_hit = 0;
+          return;
+        }
 
         talk_samples += FRAME;
       }
@@ -452,7 +502,11 @@ void loop() {
   }
 
   // TALKING: 오디오 전송
-  sendPacket(0x02, (uint8_t*)samples, (uint16_t)(FRAME * sizeof(int16_t)));
+  if (!sendPacket(0x02, (uint8_t*)samples, (uint16_t)(FRAME * sizeof(int16_t)))) {
+    state = IDLE;
+    start_hit = 0;
+    return;
+  }
   talk_samples += FRAME;
 
   float vad_off = fmaxf(noise_floor * VAD_OFF_MUL, noise_floor + 80.0f);
@@ -467,6 +521,6 @@ void loop() {
     state = IDLE;
     start_hit = 0;
     Serial.println("🛑 END");
-    sendPacket(0x03, nullptr, 0);
+    sendPacket(0x03, nullptr, 0); // 실패해도 상태는 IDLE로 변경
   }
 }

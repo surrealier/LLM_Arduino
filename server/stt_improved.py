@@ -66,16 +66,26 @@ def clamp(v, lo, hi):
 
 def recv_exact(conn, n: int):
     """안정적인 데이터 수신 with 타임아웃 처리"""
+    # Check if socket is still valid
+    try:
+        if conn is None or conn.fileno() == -1:
+            return None
+    except (OSError, AttributeError):
+        return None
+    
     buf = b""
     timeout_count = 0
     max_timeouts = 20
     while len(buf) < n:
         try:
+            # Check socket validity before each recv
+            if conn.fileno() == -1:
+                return None
             chunk = conn.recv(n - len(buf))
         except socket.timeout:
             timeout_count += 1
             if timeout_count >= max_timeouts:
-                log.warning("recv_exact timeout - connection may be dead")
+                log.warning("Too many timeouts in recv_exact - connection may be dead")
                 return None
             continue
         except (ConnectionResetError, ConnectionAbortedError, OSError) as e:
@@ -90,10 +100,21 @@ def recv_exact(conn, n: int):
 def send_packet(conn, ptype: int, payload: bytes = b"", lock=None) -> bool:
     """안정적인 패킷 전송"""
     try:
+        # Check if socket is still valid before sending
+        if conn is None or conn.fileno() == -1:
+            return False
+        
         if payload is None: 
             payload = b""
         
         def _send():
+            # Double-check socket validity inside the function
+            try:
+                if conn.fileno() == -1:
+                    return False
+            except (OSError, AttributeError):
+                return False
+            
             offset = 0
             total = len(payload)
             if total == 0:
@@ -309,6 +330,8 @@ def handle_connection(conn, addr):
 
     send_lock = threading.Lock()
     jobs = Queue(maxsize=4)
+    connection_active = threading.Event()
+    connection_active.set()  # Initially active
 
     state = {"sid": 0, "current_angle": DEFAULT_ANGLE_CENTER}
     state_lock = threading.Lock()
@@ -319,17 +342,24 @@ def handle_connection(conn, addr):
             try:
                 job = jobs.get(timeout=1)
             except Empty:
+                # Check if connection is still active
+                if not connection_active.is_set():
+                    break
                 continue
             
             if job is None:
                 return
+            
+            # Check connection before processing
+            if not connection_active.is_set():
+                break
             
             sid, data = job
             sec = len(data) / 2 / SR
             
             try:
                 if sec < 0.45:
-                    if current_mode == "robot":
+                    if current_mode == "robot" and connection_active.is_set():
                         action = {"action": "NOOP" if UNSURE_POLICY=="NOOP" else "WIGGLE",
                                   "sid": sid, "meaningful": False, "recognized": False}
                         send_action(conn, action, send_lock)
@@ -340,7 +370,7 @@ def handle_connection(conn, addr):
                 log.info(f"QC sid={sid} rms={rms_db:.1f}dBFS peak={peak:.3f} clip={clip:.2f}%")
 
                 if rms_db < -45.0:
-                    if current_mode == "robot":
+                    if current_mode == "robot" and connection_active.is_set():
                         action = {"action": "NOOP" if UNSURE_POLICY=="NOOP" else "WIGGLE",
                                   "sid": sid, "meaningful": False, "recognized": False}
                         send_action(conn, action, send_lock)
@@ -384,11 +414,11 @@ def handle_connection(conn, addr):
                         log.info(f"🔄 Mode Switched to: {current_mode}")
                         
                         notify_text = f"{new_mode} 모드로 변경되었습니다."
-                        if current_mode == "agent":
+                        if current_mode == "agent" and connection_active.is_set():
                             wav_bytes = agent_handler.text_to_audio(notify_text)
                             if wav_bytes:
                                 send_audio(conn, wav_bytes, send_lock)
-                        else:
+                        elif connection_active.is_set():
                             action = {"action": "WIGGLE", "sid": sid}
                             send_action(conn, action, send_lock)
                     continue
@@ -413,7 +443,8 @@ def handle_connection(conn, addr):
                         with state_lock:
                             state["current_angle"] = action["angle"]
 
-                    send_action(conn, action, send_lock)
+                    if connection_active.is_set():
+                        send_action(conn, action, send_lock)
 
                 elif current_mode == "agent":
                     if not text: 
@@ -424,12 +455,12 @@ def handle_connection(conn, addr):
                     llm_duration = time.time() - llm_start
                     perf_logger.log_llm(llm_duration)
                     
-                    if response:
+                    if response and connection_active.is_set():
                         tts_start = time.time()
                         wav_bytes = agent_handler.text_to_audio(response)
                         tts_duration = time.time() - tts_start
                         perf_logger.log_tts(tts_duration)
-                        if wav_bytes:
+                        if wav_bytes and connection_active.is_set():
                             send_audio(conn, wav_bytes, send_lock)
                         else:
                             log.error("TTS returned empty bytes")
@@ -449,12 +480,14 @@ def handle_connection(conn, addr):
             t = recv_exact(conn, 1)
             if t is None:
                 log.info("Disconnect detected")
+                connection_active.clear()  # Signal worker to stop
                 break
             ptype = t[0]
 
             raw_len = recv_exact(conn, 2)
             if raw_len is None:
                 log.info("Disconnect (len)")
+                connection_active.clear()  # Signal worker to stop
                 break
             (plen,) = struct.unpack("<H", raw_len)
 
@@ -463,6 +496,7 @@ def handle_connection(conn, addr):
                 payload = recv_exact(conn, plen)
                 if payload is None:
                     log.info("Disconnect (payload)")
+                    connection_active.clear()  # Signal worker to stop
                     break
 
             # Packet Handling
@@ -499,6 +533,7 @@ def handle_connection(conn, addr):
         
         except Exception as e:
             log.exception(f"Connection loop error: {e}")
+            connection_active.clear()  # Signal worker to stop
             break
 
     try:

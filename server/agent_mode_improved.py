@@ -185,9 +185,19 @@ class AgentMode:
                 add_generation_prompt=True
             )
             model_inputs = self.tokenizer([text_input], return_tensors="pt").to(self.device)
+            
+            # Create attention mask explicitly to avoid warning
+            attention_mask = model_inputs.get("attention_mask")
+            if attention_mask is None:
+                # If pad_token_id is same as eos_token_id, create attention mask manually
+                attention_mask = (model_inputs.input_ids != self.tokenizer.pad_token_id).long()
+                if self.tokenizer.pad_token_id is None:
+                    # If no pad_token, use eos_token_id
+                    attention_mask = (model_inputs.input_ids != self.tokenizer.eos_token_id).long()
 
             generated_ids = self.model.generate(
                 model_inputs.input_ids,
+                attention_mask=attention_mask,
                 max_new_tokens=256,
                 do_sample=True,
                 temperature=0.8,

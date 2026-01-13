@@ -4,36 +4,36 @@ overview: Atom Echo 기반 홈 어시스턴트/펫 시스템의 기능 확장 �
 todos:
   - id: fix-arduino-bugs
     content: Arduino 코드 문법 오류 수정 및 설정 분리
-    status: pending
+    status: completed
   - id: emotion-system
     content: 감정 상태 시스템 구현 (LED 패턴, 서보 동작)
-    status: pending
+    status: completed
     dependencies:
       - fix-arduino-bugs
   - id: info-services
     content: 시간/날씨/뉴스 정보 서비스 추가
-    status: pending
+    status: completed
   - id: proactive-interaction
     content: 프로액티브 상호작용 기능 (자발적 대화)
-    status: pending
+    status: completed
     dependencies:
       - emotion-system
   - id: config-management
     content: 통합 설정 관리 (config.yaml, .env)
-    status: pending
+    status: completed
   - id: scheduler
     content: 일정 및 리마인더 시스템
-    status: pending
+    status: completed
     dependencies:
       - info-services
   - id: personality-customization
     content: 개성 및 이름 커스터마이즈
-    status: pending
+    status: completed
     dependencies:
       - config-management
   - id: logging-improvements
     content: 로깅 및 모니터링 강화
-    status: pending
+    status: completed
 ---
 
 # 홈 어시스턴트/펫 기능 강화 및 개선 계획

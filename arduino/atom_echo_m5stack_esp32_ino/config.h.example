@@ -1,0 +1,15 @@
+// WiFi Configuration
+// Copy this file and rename to config.h, then fill in your credentials
+
+#ifndef CONFIG_H
+#define CONFIG_H
+
+// WiFi Settings
+const char* SSID = "YOUR_WIFI_SSID";    // Your WiFi SSID
+const char* PASS = "YOUR_WIFI_PASSWORD"; // Your WiFi Password
+
+// Server Settings
+const char* SERVER_IP = "192.168.1.100"; // Server IP Address (change to your PC IP)
+const uint16_t SERVER_PORT = 5001;       // Server Port
+
+#endif // CONFIG_H

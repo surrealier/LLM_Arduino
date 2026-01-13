@@ -12,13 +12,31 @@ import yaml
 
 from robot_mode_improved import RobotMode
 from agent_mode_improved import AgentMode
+from config_loader import get_config
+from logger_config import setup_logging, get_performance_logger
 
-HOST = "0.0.0.0"
-PORT = 5001
+# Load configuration
+config = get_config()
+
+# Setup logging first
+logging_config = config.get_logging_config()
+setup_logging(
+    level=logging_config.get("level", "INFO"),
+    save_to_file=logging_config.get("save_to_file", True),
+    log_dir=logging_config.get("log_dir", "logs")
+)
+
+log = logging.getLogger("stt")
+perf_logger = get_performance_logger()
+
+# Server settings
+HOST = config.get("server", "host")
+PORT = config.get("server", "port")
 SR = 16000
 
-MODEL_SIZE = "small"
-PREFER_DEVICE = "cuda"
+# STT settings
+MODEL_SIZE = config.get("stt", "model_size")
+PREFER_DEVICE = config.get("stt", "device")
 CPU_FALLBACK_COMPUTE = "int8"
 
 # Protocol
@@ -36,9 +54,6 @@ SERVO_MIN = 0
 SERVO_MAX = 180
 DEFAULT_ANGLE_CENTER = 90
 DEFAULT_STEP = 20
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
-log = logging.getLogger("stt")
 
 ACTIONS_CONFIG = []
 current_mode = "robot"
@@ -341,10 +356,14 @@ def handle_connection(conn, addr):
 
                 text = ""
                 try:
+                    stt_start = time.time()
                     segments, info = safe_transcribe(pcm)
                     text = clean_text("".join(seg.text for seg in segments))
+                    stt_duration = time.time() - stt_start
+                    perf_logger.log_stt(stt_duration)
                 except Exception as e:
                     log.exception(f"Transcribe failed sid={sid}: {e}")
+                    perf_logger.log_error()
                     continue
 
                 if text:
@@ -377,7 +396,10 @@ def handle_connection(conn, addr):
                 # Mode-specific Processing
                 if current_mode == "robot":
                     # LLM으로 STT 정제 및 명령 결정
+                    llm_start = time.time()
                     refined_text, robot_action = robot_handler.process_with_llm(text, cur)
+                    llm_duration = time.time() - llm_start
+                    perf_logger.log_llm(llm_duration)
                     
                     if refined_text != text:
                         log.info(f"🔧 LLM Refined: {text} -> {refined_text}")
@@ -397,9 +419,16 @@ def handle_connection(conn, addr):
                     if not text: 
                         continue
                     
+                    llm_start = time.time()
                     response = agent_handler.generate_response(text)
+                    llm_duration = time.time() - llm_start
+                    perf_logger.log_llm(llm_duration)
+                    
                     if response:
+                        tts_start = time.time()
                         wav_bytes = agent_handler.text_to_audio(response)
+                        tts_duration = time.time() - tts_start
+                        perf_logger.log_tts(tts_duration)
                         if wav_bytes:
                             send_audio(conn, wav_bytes, send_lock)
                         else:
@@ -407,6 +436,7 @@ def handle_connection(conn, addr):
             
             except Exception as e:
                 log.exception(f"Worker error processing sid={sid}: {e}")
+                perf_logger.log_error()
                 continue
 
     threading.Thread(target=worker, daemon=True).start()
@@ -481,8 +511,23 @@ def main():
     
     load_commands_config()
     
+    # Get config
+    weather_config = config.get_weather_config()
+    weather_api_key = weather_config.get("api_key")
+    location = weather_config.get("location", "Seoul")
+    
+    assistant_config = config.get_assistant_config()
+    proactive_enabled = assistant_config.get("proactive", True)
+    proactive_interval = assistant_config.get("proactive_interval", 1800)
+    
+    tts_config = config.get_tts_config()
+    tts_voice = tts_config.get("voice", "ko-KR-SunHiNeural")
+    
     robot_handler = RobotMode(ACTIONS_CONFIG, PREFER_DEVICE)
-    agent_handler = AgentMode(PREFER_DEVICE)
+    agent_handler = AgentMode(PREFER_DEVICE, weather_api_key, location, 
+                               proactive_enabled, proactive_interval, tts_voice)
+    
+    log.info(f"🤖 Assistant: {assistant_config.get('name', '아이')} ({assistant_config.get('personality', 'cheerful')})")
     
     robot_handler.load_model()
     agent_handler.load_model()
@@ -493,6 +538,14 @@ def main():
     srv.listen(5)
 
     log.info(f"🚀 Server started on {PORT}. Default Mode: {current_mode}")
+    
+    # 통계 출력 타이머
+    import signal
+    def print_stats_handler(signum, frame):
+        perf_logger.print_stats()
+    
+    # Ctrl+C 시 통계 출력
+    signal.signal(signal.SIGINT, print_stats_handler)
 
     while True:
         log.info("Ready for next connection...")

@@ -6,15 +6,21 @@ import json
 import time
 from pathlib import Path
 from datetime import datetime
+from typing import Optional
+from emotion_system import EmotionSystem
+from info_services import InfoServices
+from proactive_interaction import ProactiveInteraction
+from scheduler import Scheduler
 
 log = logging.getLogger("agent_mode")
 
 class AgentMode:
-    def __init__(self, device="cuda"):
+    def __init__(self, device="cuda", weather_api_key=None, location="Seoul", 
+                 proactive_enabled=True, proactive_interval=1800, tts_voice=None):
         self.device = device
         self.model = None
         self.tokenizer = None
-        self.tts_voice = "ko-KR-SunHiNeural"
+        self.tts_voice = tts_voice or "ko-KR-SunHiNeural"
         
         # 대화 컨텍스트 관리
         self.conversation_history = []
@@ -22,6 +28,18 @@ class AgentMode:
         self.max_history = 20  # 최근 20개 대화만 유지
         self.context_backup_interval = 10  # 10개 대화마다 백업
         self.conversation_count = 0
+        
+        # 감정 시스템
+        self.emotion_system = EmotionSystem()
+        
+        # 정보 서비스
+        self.info_services = InfoServices(weather_api_key, location)
+        
+        # 프로액티브 상호작용
+        self.proactive = ProactiveInteraction(proactive_enabled, proactive_interval)
+        
+        # 스케줄러
+        self.scheduler = Scheduler()
         
         # 백업 디렉토리
         self.backup_dir = Path("context_backup")
@@ -55,13 +73,33 @@ class AgentMode:
         except Exception as e:
             log.error(f"Failed to load Agent LLM: {e}")
 
+    def _get_personality_traits(self, personality: str) -> str:
+        """성격 타입별 특성 반환"""
+        traits = {
+            "cheerful": "밝고 활발하며 긍정적입니다. 대화에서 즐거움과 에너지를 전달합니다.",
+            "calm": "차분하고 안정적이며 신중합니다. 편안하고 믿을 수 있는 분위기를 만듭니다.",
+            "playful": "장난기 있고 유쾌하며 창의적입니다. 재미있는 표현을 자주 사용합니다.",
+            "serious": "진지하고 전문적이며 효율적입니다. 정확한 정보와 실용적인 조언을 제공합니다."
+        }
+        return traits.get(personality, traits["cheerful"])
+    
     def _get_system_prompt(self) -> str:
         """홈 어시스턴트 시스템 프롬프트"""
+        from config_loader import get_config
+        config = get_config()
+        assistant_config = config.get_assistant_config()
+        
+        assistant_name = assistant_config.get("name", "아이")
+        personality = assistant_config.get("personality", "cheerful")
+        personality_trait = self._get_personality_traits(personality)
+        
         memories_text = ""
         if self.important_memories:
             memories_text = "\n\n중요한 기억:\n" + "\n".join(f"- {mem}" for mem in self.important_memories[-10:])
         
-        return f"""당신은 가정용 AI 홈 어시스턴트입니다. 이름은 사용자가 정해줄 수 있습니다.
+        return f"""당신은 가정용 AI 홈 어시스턴트입니다. 이름은 '{assistant_name}'입니다.
+
+성격: {personality_trait}
 
 핵심 역할:
 1. 가족 구성원들과 자연스럽고 친근한 대화
@@ -80,9 +118,10 @@ class AgentMode:
 응답 스타일:
 - 한국어로 자연스럽게 대화
 - 2-3문장 이내로 간결하게 답변
-- 친근하고 따뜻한 어조 유지
+- 성격에 맞는 어조 유지
 - 필요시 이전 대화 내용 언급
 - 불확실한 정보는 솔직히 모른다고 말하기
+- 자신을 '{assistant_name}'이라고 소개하세요
 
 현재 기능:
 - 음성 대화 (STT/TTS)
@@ -90,17 +129,44 @@ class AgentMode:
 - 정보 제공 및 대화
 {memories_text}"""
 
-    def generate_response(self, text: str) -> str:
+    def generate_response(self, text: str, is_proactive: bool = False) -> str:
         """사용자 입력에 대한 응답 생성"""
         if not self.model or not self.tokenizer:
             return "모델이 로드되지 않았습니다."
 
         try:
+            # 사용자 상호작용 업데이트 (프로액티브가 아닐 때만)
+            if not is_proactive:
+                self.proactive.update_interaction()
+            
+            # 수면 모드 명령 확인
+            if not is_proactive:
+                sleep_response = self._check_sleep_commands(text)
+                if sleep_response:
+                    return sleep_response
+            
+            # 정보 요청 확인 (날씨, 시간 등)
+            if not is_proactive:
+                info_response = self.info_services.process_info_request(text)
+                if info_response:
+                    log.info(f"Info request processed: {text[:30]}...")
+                    return info_response
+                
+                # 일정 요청 확인
+                schedule_response = self.scheduler.process_schedule_request(text)
+                if schedule_response:
+                    log.info(f"Schedule request processed: {text[:30]}...")
+                    return schedule_response
+            
+            # 감정 분석
+            detected_emotion = self.emotion_system.analyze_emotion(text)
+            
             # 대화 히스토리에 추가
             self.conversation_history.append({
                 "role": "user",
                 "content": text,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
+                "emotion": detected_emotion
             })
             
             # 컨텍스트 구성
@@ -135,11 +201,15 @@ class AgentMode:
 
             response = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
             
+            # 응답 감정 분석
+            response_emotion = self.emotion_system.analyze_emotion(response)
+            
             # 응답을 히스토리에 추가
             self.conversation_history.append({
                 "role": "assistant",
                 "content": response,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
+                "emotion": response_emotion
             })
             
             self.conversation_count += 1
@@ -272,6 +342,68 @@ class AgentMode:
             log.error(f"TTS failed: {e}")
             return b""
 
+    def get_emotion_command(self):
+        """현재 감정 상태에 대한 명령 반환"""
+        return self.emotion_system.get_emotion_command()
+    
+    def _check_sleep_commands(self, text: str) -> Optional[str]:
+        """수면/멈춤 명령 확인"""
+        text_lower = text.lower()
+        
+        # 수면 모드 (다음날까지)
+        sleep_keywords = ["잘게", "잔다", "자러", "잘 시간", "수면", "조용히", "그만 말해"]
+        if any(keyword in text_lower for keyword in sleep_keywords):
+            return self.proactive.enter_sleep_mode()
+        
+        # 일시 정지
+        pause_keywords = ["멈춰", "조용히 해", "시끄러", "잠깐만", "좀 쉬어"]
+        if any(keyword in text_lower for keyword in pause_keywords):
+            # 시간 추출 시도
+            import re
+            hours_match = re.search(r'(\d+)\s*시간', text_lower)
+            if hours_match:
+                hours = int(hours_match.group(1))
+                return self.proactive.pause_temporarily(hours)
+            else:
+                return self.proactive.pause_temporarily(1)  # 기본 1시간
+        
+        # 깨우기
+        wake_keywords = ["일어나", "다시 말해", "깨워", "시작"]
+        if any(keyword in text_lower for keyword in wake_keywords):
+            return self.proactive.wake_up()
+        
+        return None
+    
+    def get_proactive_message(self) -> Optional[str]:
+        """프로액티브 메시지 생성"""
+        return self.proactive.get_proactive_message(
+            current_emotion=self.emotion_system.current_emotion,
+            important_memories=self.important_memories
+        )
+    
+    def check_timers_and_alarms(self):
+        """타이머, 알람, 일정 리마인더 확인"""
+        messages = []
+        
+        # 타이머 확인
+        expired_timers = self.info_services.check_timers()
+        for timer in expired_timers:
+            messages.append(f"⏰ {timer['label']} 타이머가 완료되었습니다!")
+        
+        # 알람 확인
+        triggered_alarms = self.info_services.check_alarms()
+        for alarm in triggered_alarms:
+            messages.append(f"⏰ {alarm['label']} 알람입니다!")
+        
+        # 일정 리마인더 확인
+        reminders = self.scheduler.check_reminders()
+        for schedule in reminders:
+            dt = datetime.fromisoformat(schedule["datetime"])
+            time_str = dt.strftime("%H:%M")
+            messages.append(f"📅 {time_str}에 '{schedule['title']}' 일정이 있습니다!")
+        
+        return messages
+    
     def clear_context(self):
         """컨텍스트 수동 초기화 (백업 후)"""
         self._backup_context()

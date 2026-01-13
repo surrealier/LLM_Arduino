@@ -4,15 +4,11 @@
 #include <string.h>
 #include <ctype.h>
 #include <ESP32Servo.h>
+#include "config.h"
 
 #define SERVO_PIN 25 // M5Atom Echo Grove Port (G21) - Check your wiring!
 Servo myServo;
 
-const char* SSID = "KT_GiGA_3926"; // WIFI 이름
-const char* PASS = "fbx7bef119"; // WIFI 비밀번호
-
-const char* SERVER_IP = "172.30.1.20"; // 서버 IP 주소
-const uint16_t SERVER_PORT = 5001; // 서버 포트
 WiFiClient client; // WiFi 클라이언트
 
 enum State { IDLE, TALKING }; // 상태
@@ -21,6 +17,29 @@ static constexpr uint8_t PTYPE_PING = 0x10; // 패킷 타입
 static uint32_t last_ping_ms = 0; // 마지막 패킷 시간
 
 static void sendPacket(uint8_t type, const uint8_t* payload, uint16_t len); // Forward declaration
+static void performEmotionAction(const char* emotion, const char* servo_action); // Forward declaration
+
+// ===== Emotion & LED Patterns =====
+struct EmotionState {
+  char current_emotion[16] = "neutral";
+  uint32_t last_pattern_update = 0;
+  uint8_t pattern_phase = 0;
+} emotion_state;
+
+static void setLEDColor(uint8_t r, uint8_t g, uint8_t b) {
+  M5.dis.fillpix(M5.dis.color565(r, g, b));
+}
+
+static void updateLEDPattern() {
+  // This is called periodically to animate LED patterns
+  // For now, simple implementation
+  uint32_t now = millis();
+  if (now - emotion_state.last_pattern_update < 100) return; // Update every 100ms
+  emotion_state.last_pattern_update = now;
+  
+  // Simple pattern based on emotion
+  // Full implementation can be added later
+}
 
 static void sendPingIfIdle() { // 패킷 전송
   if (!client.connected()) return; // 클라이언트가 연결되어 있지 않으면 리턴
@@ -288,6 +307,19 @@ static void handleCmdJson(const uint8_t* payload, uint16_t len) {
 
   // 🚧 Robot/Servo Actions
   // Policy: Always start 0 -> Action(max 1 time or 3sec) -> Return 0
+  
+  // Check for EMOTION action first
+  if (strcmp(action, "EMOTION") == 0) {
+    char emotion[32] = {0};
+    char servo_action[32] = {0};
+    json_get_string(json, "emotion", emotion, sizeof(emotion));
+    json_get_string(json, "servo_action", servo_action, sizeof(servo_action));
+    
+    Serial.printf("😊 EMOTION: %s (servo: %s)\n", emotion, servo_action);
+    performEmotionAction(emotion, servo_action);
+    return;
+  }
+  
   if (!meaningful) {
     if (strcmp(action, "WIGGLE") == 0) {
       Serial.println("🤷 WIGGLE (Not meaningful)");
@@ -435,6 +467,69 @@ static void pollServerPackets() {
   }
 }
 
+static void performEmotionAction(const char* emotion, const char* servo_action) {
+  // Update emotion state
+  strncpy(emotion_state.current_emotion, emotion, sizeof(emotion_state.current_emotion) - 1);
+  
+  // Set LED color based on emotion
+  if (strcmp(emotion, "happy") == 0) {
+    setLEDColor(255, 200, 0); // Yellow
+  } else if (strcmp(emotion, "sad") == 0) {
+    setLEDColor(0, 100, 255); // Blue
+  } else if (strcmp(emotion, "excited") == 0) {
+    setLEDColor(255, 50, 200); // Pink
+  } else if (strcmp(emotion, "sleepy") == 0) {
+    setLEDColor(100, 100, 150); // Purple
+  } else if (strcmp(emotion, "angry") == 0) {
+    setLEDColor(255, 0, 0); // Red
+  } else { // neutral
+    setLEDColor(100, 255, 100); // Green
+  }
+  
+  // Perform servo action
+  if (strcmp(servo_action, "NOD") == 0) {
+    // Nod: 90 -> 110 -> 90 -> 70 -> 90
+    myServo.write(90); delay(300);
+    myServo.write(110); delay(400);
+    myServo.write(90); delay(300);
+    myServo.write(70); delay(400);
+    myServo.write(90); delay(300);
+  } else if (strcmp(servo_action, "SHAKE_SLOW") == 0) {
+    // Slow shake: left-center-right-center
+    myServo.write(60); delay(600);
+    myServo.write(90); delay(400);
+    myServo.write(120); delay(600);
+    myServo.write(90); delay(400);
+  } else if (strcmp(servo_action, "WIGGLE_FAST") == 0) {
+    // Fast wiggle
+    for (int i = 0; i < 4; i++) {
+      myServo.write(70); delay(150);
+      myServo.write(110); delay(150);
+    }
+    myServo.write(90);
+  } else if (strcmp(servo_action, "DRIFT") == 0) {
+    // Slowly drift down
+    for (int angle = 90; angle >= 30; angle -= 5) {
+      myServo.write(angle);
+      delay(100);
+    }
+    delay(1000);
+    myServo.write(90); // Return
+  } else if (strcmp(servo_action, "SHAKE_SHARP") == 0) {
+    // Sharp shakes
+    for (int i = 0; i < 5; i++) {
+      myServo.write(60); delay(100);
+      myServo.write(120); delay(100);
+    }
+    myServo.write(90);
+  } else { // CENTER or unknown
+    myServo.write(90);
+  }
+  
+  // Return to neutral position
+  myServo.write(0);
+}
+
 void setup() {
   auto cfg = M5.config();
   cfg.internal_mic = true;
@@ -445,7 +540,6 @@ void setup() {
   M5.Speaker.setVolume(255);
 
   M5.Mic.setSampleRate(SR);
-s
   Serial.begin(115200);
 
   delay(1000); // Stabilize power

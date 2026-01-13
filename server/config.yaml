@@ -1,0 +1,52 @@
+# LLM Arduino Home Assistant Configuration
+
+# Server Settings
+server:
+  host: "0.0.0.0"
+  port: 5001
+
+# STT (Speech-to-Text) Settings
+stt:
+  model_size: "small"  # tiny, base, small, medium, large
+  device: "cuda"       # cuda or cpu
+  language: "ko"
+
+# LLM Settings
+llm:
+  model_name: "Qwen/Qwen2.5-0.5B-Instruct"
+  device: "cuda"       # cuda or cpu
+
+# TTS (Text-to-Speech) Settings
+tts:
+  voice: "ko-KR-SunHiNeural"  # Microsoft Edge TTS voice
+  # Other options: ko-KR-InJoonNeural (male)
+
+# Pet/Assistant Settings
+assistant:
+  name: "아이"              # Assistant name (default)
+  personality: "cheerful"   # cheerful, calm, playful, serious
+  proactive: true           # Enable proactive interactions
+  proactive_interval: 600   # Seconds between proactive messages (10 min)
+
+# Weather Service (OpenWeatherMap)
+weather:
+  api_key: ""               # Get free key from openweathermap.org
+  location: "Seoul"         # City name
+
+# Context Management
+context:
+  max_history: 20           # Number of conversations to keep
+  backup_interval: 10       # Backup every N conversations
+  auto_save: true
+
+# Emotion System
+emotion:
+  enabled: true
+  decay_to_neutral: true
+  decay_interval: 300       # Seconds (5 minutes)
+
+# Logging
+logging:
+  level: "INFO"             # DEBUG, INFO, WARNING, ERROR
+  save_to_file: true
+  log_dir: "logs"

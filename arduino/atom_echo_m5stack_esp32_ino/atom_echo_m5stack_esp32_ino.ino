@@ -16,7 +16,7 @@ State state = IDLE;
 static constexpr uint8_t PTYPE_PING = 0x10; // 패킷 타입
 static uint32_t last_ping_ms = 0; // 마지막 패킷 시간
 
-static void sendPacket(uint8_t type, const uint8_t* payload, uint16_t len); // Forward declaration
+static bool sendPacket(uint8_t type, const uint8_t* payload, uint16_t len); // Forward declaration
 static void performEmotionAction(const char* emotion, const char* servo_action); // Forward declaration
 
 // ===== Emotion & LED Patterns =====
@@ -27,7 +27,9 @@ struct EmotionState {
 } emotion_state;
 
 static void setLEDColor(uint8_t r, uint8_t g, uint8_t b) {
-  M5.dis.fillpix(M5.dis.color565(r, g, b));
+  // M5Atom Echo doesn't have M5.dis - LED control removed
+  // If LED control is needed, use FastLED or NeoPixel library
+  (void)r; (void)g; (void)b; // Suppress unused parameter warnings
 }
 
 static void updateLEDPattern() {
@@ -113,6 +115,13 @@ static bool sendPacket(uint8_t type, const uint8_t* payload, uint16_t len) {
 
 static unsigned long last_connect_attempt = 0;
 static constexpr unsigned long CONNECT_INTERVAL_MS = 5000;
+
+// RX State Machine - moved before manageConnections to fix declaration order
+enum RxStage { RX_TYPE, RX_LEN0, RX_LEN1, RX_PAYLOAD };
+static RxStage rx_stage = RX_TYPE;
+static uint8_t  rx_type = 0;
+static uint16_t rx_len = 0;
+static uint16_t rx_pos = 0;
 
 static void manageConnections() {
   // 1. Check WiFi
@@ -203,12 +212,6 @@ static constexpr size_t AUDIO_BUFFER_MAX = 32768; // 16KB (약 1초 @ 16kHz)
 static uint8_t* rx_audio_buf = nullptr;
 static size_t rx_audio_buf_size = 0; 
 
-
-enum RxStage { RX_TYPE, RX_LEN0, RX_LEN1, RX_PAYLOAD };
-static RxStage rx_stage = RX_TYPE;
-static uint8_t  rx_type = 0;
-static uint16_t rx_len = 0;
-static uint16_t rx_pos = 0;
 static uint8_t  rx_buf[RX_MAX_PAYLOAD]; // payload buffer (truncated if longer)
 
 // --- tiny JSON getters (dependency-free) ---

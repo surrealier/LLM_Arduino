@@ -50,3 +50,17 @@ logging:
   level: "INFO"             # DEBUG, INFO, WARNING, ERROR
   save_to_file: true
   log_dir: "logs"
+
+# Connection Settings
+connection:
+  socket_timeout: 0.5
+
+# Queue Settings
+queue:
+  stt_maxsize: 4
+  tts_maxsize: 2
+  command_maxsize: 10
+
+# Audio Settings
+audio:
+  max_seconds: 12

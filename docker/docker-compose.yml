@@ -1,0 +1,12 @@
+version: "3.8"
+services:
+  llm_arduino_server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "5001:5001"
+    volumes:
+      - ../server:/app/server
+    environment:
+      - LOG_LEVEL=INFO

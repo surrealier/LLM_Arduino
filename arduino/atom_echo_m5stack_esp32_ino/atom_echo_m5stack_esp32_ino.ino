@@ -5,7 +5,14 @@
 #include <ctype.h>
 #include <ESP32Servo.h>
 #include "config.h"
+#include "audio_buffer.h"
+#include "connection.h"
+#include "led_control.h"
+#include "protocol.h"
+#include "servo_control.h"
+#include "vad.h"
 
+<<<<<<< HEAD
 // #region agent log helper
 static void debugLog(const char* location, const char* message, const char* hypothesisId, const char* dataJson = "{}") {
   Serial.print("[DEBUG ");

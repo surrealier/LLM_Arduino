@@ -275,34 +275,47 @@ class AgentMode:
     async def _tts_gen(self, text, output_file):
         # #region debug log
         import json
-        with open(r'c:\bongkj\Projects\LLM_Arduino\.cursor\debug.log', 'a', encoding='utf-8') as f:
+        import os
+        log_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', '.cursor', 'debug.log')
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        with open(log_path, 'a', encoding='utf-8') as f:
             f.write(json.dumps({"location":"agent_mode.py:274","message":"_tts_gen called","data":{"text_length":len(text),"output_file":output_file,"voice":self.tts_voice},"timestamp":int(time.time()*1000),"sessionId":"debug-session","hypothesisId":"H4"}) + '\n')
         # #endregion
         try:
             # #region debug log
-            with open(r'c:\bongkj\Projects\LLM_Arduino\.cursor\debug.log', 'a', encoding='utf-8') as f:
+            log_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', '.cursor', 'debug.log')
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            with open(log_path, 'a', encoding='utf-8') as f:
                 f.write(json.dumps({"location":"agent_mode.py:275","message":"Before import edge_tts","data":{},"timestamp":int(time.time()*1000),"sessionId":"debug-session","hypothesisId":"H1"}) + '\n')
             # #endregion
             import edge_tts
             # #region debug log
-            with open(r'c:\bongkj\Projects\LLM_Arduino\.cursor\debug.log', 'a', encoding='utf-8') as f:
+            log_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', '.cursor', 'debug.log')
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            with open(log_path, 'a', encoding='utf-8') as f:
                 f.write(json.dumps({"location":"agent_mode.py:275-after","message":"edge_tts imported successfully","data":{},"timestamp":int(time.time()*1000),"sessionId":"debug-session","hypothesisId":"H1"}) + '\n')
             # #endregion
 
             communicate = edge_tts.Communicate(text, self.tts_voice)
             # #region debug log
-            with open(r'c:\bongkj\Projects\LLM_Arduino\.cursor\debug.log', 'a', encoding='utf-8') as f:
+            log_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', '.cursor', 'debug.log')
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            with open(log_path, 'a', encoding='utf-8') as f:
                 f.write(json.dumps({"location":"agent_mode.py:277","message":"Communicate object created","data":{},"timestamp":int(time.time()*1000),"sessionId":"debug-session","hypothesisId":"H4"}) + '\n')
             # #endregion
             await communicate.save(output_file)
             # #region debug log
-            with open(r'c:\bongkj\Projects\LLM_Arduino\.cursor\debug.log', 'a', encoding='utf-8') as f:
+            log_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', '.cursor', 'debug.log')
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            with open(log_path, 'a', encoding='utf-8') as f:
                 f.write(json.dumps({"location":"agent_mode.py:278","message":"communicate.save completed","data":{},"timestamp":int(time.time()*1000),"sessionId":"debug-session","hypothesisId":"H4"}) + '\n')
             # #endregion
         except Exception as e:
             # #region debug log
             import traceback
-            with open(r'c:\bongkj\Projects\LLM_Arduino\.cursor\debug.log', 'a', encoding='utf-8') as f:
+            log_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', '.cursor', 'debug.log')
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            with open(log_path, 'a', encoding='utf-8') as f:
                 f.write(json.dumps({"location":"agent_mode.py:274-exception","message":"Exception in _tts_gen","data":{"error":str(e),"error_type":type(e).__name__,"traceback":traceback.format_exc()},"timestamp":int(time.time()*1000),"sessionId":"debug-session","hypothesisId":"H1,H4"}) + '\n')
             # #endregion
             raise
@@ -310,27 +323,36 @@ class AgentMode:
     def text_to_audio(self, text: str):
         # #region debug log
         import json
-        with open(r'c:\bongkj\Projects\LLM_Arduino\.cursor\debug.log', 'a', encoding='utf-8') as f:
+        import os
+        log_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', '.cursor', 'debug.log')
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        with open(log_path, 'a', encoding='utf-8') as f:
             f.write(json.dumps({"location":"agent_mode.py:280","message":"text_to_audio called","data":{"text_length":len(text),"text_preview":text[:50]},"timestamp":int(time.time()*1000),"sessionId":"debug-session","hypothesisId":"H1,H2"}) + '\n')
         # #endregion
         try:
             # #region debug log
-            with open(r'c:\bongkj\Projects\LLM_Arduino\.cursor\debug.log', 'a', encoding='utf-8') as f:
+            with open(log_path, 'a', encoding='utf-8') as f:
                 f.write(json.dumps({"location":"agent_mode.py:282","message":"Before import librosa","data":{},"timestamp":int(time.time()*1000),"sessionId":"debug-session","hypothesisId":"H2"}) + '\n')
             # #endregion
             import librosa
             # #region debug log
-            with open(r'c:\bongkj\Projects\LLM_Arduino\.cursor\debug.log', 'a', encoding='utf-8') as f:
+            log_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', '.cursor', 'debug.log')
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            with open(log_path, 'a', encoding='utf-8') as f:
                 f.write(json.dumps({"location":"agent_mode.py:283","message":"librosa imported successfully","data":{},"timestamp":int(time.time()*1000),"sessionId":"debug-session","hypothesisId":"H2"}) + '\n')
             # #endregion
             import os
             # #region debug log
-            with open(r'c:\bongkj\Projects\LLM_Arduino\.cursor\debug.log', 'a', encoding='utf-8') as f:
+            log_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', '.cursor', 'debug.log')
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            with open(log_path, 'a', encoding='utf-8') as f:
                 f.write(json.dumps({"location":"agent_mode.py:284","message":"Before import audio_processor","data":{},"timestamp":int(time.time()*1000),"sessionId":"debug-session","hypothesisId":"H3"}) + '\n')
             # #endregion
             from src.audio_processor import normalize_to_dbfs, qc, trim_energy
             # #region debug log
-            with open(r'c:\bongkj\Projects\LLM_Arduino\.cursor\debug.log', 'a', encoding='utf-8') as f:
+            log_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', '.cursor', 'debug.log')
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            with open(log_path, 'a', encoding='utf-8') as f:
                 f.write(json.dumps({"location":"agent_mode.py:285","message":"audio_processor imported successfully","data":{},"timestamp":int(time.time()*1000),"sessionId":"debug-session","hypothesisId":"H3"}) + '\n')
             # #endregion
 
@@ -341,43 +363,57 @@ class AgentMode:
             try:
                 loop = asyncio.get_event_loop()
                 # #region debug log
-                with open(r'c:\bongkj\Projects\LLM_Arduino\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                log_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', '.cursor', 'debug.log')
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            with open(log_path, 'a', encoding='utf-8') as f:
                     f.write(json.dumps({"location":"agent_mode.py:291","message":"Got existing event loop","data":{},"timestamp":int(time.time()*1000),"sessionId":"debug-session","hypothesisId":"H4"}) + '\n')
                 # #endregion
             except RuntimeError:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 # #region debug log
-                with open(r'c:\bongkj\Projects\LLM_Arduino\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                log_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', '.cursor', 'debug.log')
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            with open(log_path, 'a', encoding='utf-8') as f:
                     f.write(json.dumps({"location":"agent_mode.py:294","message":"Created new event loop","data":{},"timestamp":int(time.time()*1000),"sessionId":"debug-session","hypothesisId":"H4"}) + '\n')
                 # #endregion
 
             # #region debug log
-            with open(r'c:\bongkj\Projects\LLM_Arduino\.cursor\debug.log', 'a', encoding='utf-8') as f:
+            log_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', '.cursor', 'debug.log')
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            with open(log_path, 'a', encoding='utf-8') as f:
                 f.write(json.dumps({"location":"agent_mode.py:296","message":"Before _tts_gen","data":{"tmp_mp3":tmp_mp3},"timestamp":int(time.time()*1000),"sessionId":"debug-session","hypothesisId":"H4"}) + '\n')
             # #endregion
             loop.run_until_complete(self._tts_gen(text, tmp_mp3))
             # #region debug log
-            with open(r'c:\bongkj\Projects\LLM_Arduino\.cursor\debug.log', 'a', encoding='utf-8') as f:
+            log_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', '.cursor', 'debug.log')
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            with open(log_path, 'a', encoding='utf-8') as f:
                 f.write(json.dumps({"location":"agent_mode.py:296-after","message":"After _tts_gen","data":{"file_exists":os.path.exists(tmp_mp3)},"timestamp":int(time.time()*1000),"sessionId":"debug-session","hypothesisId":"H4"}) + '\n')
             # #endregion
 
             if not os.path.exists(tmp_mp3):
                 log.error("TTS file not created: %s", tmp_mp3)
                 # #region debug log
-                with open(r'c:\bongkj\Projects\LLM_Arduino\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                log_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', '.cursor', 'debug.log')
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            with open(log_path, 'a', encoding='utf-8') as f:
                     f.write(json.dumps({"location":"agent_mode.py:298","message":"TTS file not created","data":{"tmp_mp3":tmp_mp3},"timestamp":int(time.time()*1000),"sessionId":"debug-session","hypothesisId":"H4"}) + '\n')
                 # #endregion
                 return b""
 
             # #region debug log
-            with open(r'c:\bongkj\Projects\LLM_Arduino\.cursor\debug.log', 'a', encoding='utf-8') as f:
+            log_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', '.cursor', 'debug.log')
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            with open(log_path, 'a', encoding='utf-8') as f:
                 f.write(json.dumps({"location":"agent_mode.py:303","message":"TTS file exists, loading with librosa","data":{"file_size":os.path.getsize(tmp_mp3)},"timestamp":int(time.time()*1000),"sessionId":"debug-session","hypothesisId":"H5"}) + '\n')
             # #endregion
             # 오디오 로드 및 리샘플링 (16kHz, mono)
             pcm_f32, sr = librosa.load(tmp_mp3, sr=16000, mono=True)
             # #region debug log
-            with open(r'c:\bongkj\Projects\LLM_Arduino\.cursor\debug.log', 'a', encoding='utf-8') as f:
+            log_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', '.cursor', 'debug.log')
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            with open(log_path, 'a', encoding='utf-8') as f:
                 f.write(json.dumps({"location":"agent_mode.py:303-after","message":"librosa.load success","data":{"pcm_size":pcm_f32.size,"sr":sr},"timestamp":int(time.time()*1000),"sessionId":"debug-session","hypothesisId":"H5"}) + '\n')
             # #endregion
 
@@ -410,14 +446,18 @@ class AgentMode:
             )
 
             # #region debug log
-            with open(r'c:\bongkj\Projects\LLM_Arduino\.cursor\debug.log', 'a', encoding='utf-8') as f:
+            log_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', '.cursor', 'debug.log')
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            with open(log_path, 'a', encoding='utf-8') as f:
                 f.write(json.dumps({"location":"agent_mode.py:333","message":"TTS success, returning bytes","data":{"audio_bytes_len":len(audio_bytes)},"timestamp":int(time.time()*1000),"sessionId":"debug-session","hypothesisId":"H5"}) + '\n')
             # #endregion
             return audio_bytes
         except ImportError as ie:
             # #region debug log
             import traceback
-            with open(r'c:\bongkj\Projects\LLM_Arduino\.cursor\debug.log', 'a', encoding='utf-8') as f:
+            log_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', '.cursor', 'debug.log')
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            with open(log_path, 'a', encoding='utf-8') as f:
                 f.write(json.dumps({"location":"agent_mode.py:335","message":"ImportError caught","data":{"error":str(ie),"traceback":traceback.format_exc()},"timestamp":int(time.time()*1000),"sessionId":"debug-session","hypothesisId":"H1,H2,H3"}) + '\n')
             # #endregion
             log.error("Install edge-tts, librosa, soundfile: pip install edge-tts librosa soundfile")
@@ -425,7 +465,9 @@ class AgentMode:
         except Exception as exc:
             # #region debug log
             import traceback
-            with open(r'c:\bongkj\Projects\LLM_Arduino\.cursor\debug.log', 'a', encoding='utf-8') as f:
+            log_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', '.cursor', 'debug.log')
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            with open(log_path, 'a', encoding='utf-8') as f:
                 f.write(json.dumps({"location":"agent_mode.py:338","message":"General exception caught","data":{"error":str(exc),"error_type":type(exc).__name__,"traceback":traceback.format_exc()},"timestamp":int(time.time()*1000),"sessionId":"debug-session","hypothesisId":"H4,H5"}) + '\n')
             # #endregion
             log.error("TTS failed: %s", exc, exc_info=True)

@@ -11,6 +11,12 @@
 
 #define SERVO_PIN 25
 
+// Config variable definitions
+const char* SSID = "KT_GiGA_3926";
+const char* PASS = "fbx7bef119";
+const char* SERVER_IP = "172.30.1.20";
+const uint16_t SERVER_PORT = 5001;
+
 static constexpr uint32_t SR = 16000;
 static constexpr size_t FRAME = 320;
 
@@ -34,6 +40,7 @@ void setup() {
   Serial.begin(115200);
   delay(500);
 
+  led_init();
   servo_init(SERVO_PIN);
   led_set_color(255, 0, 0);
 

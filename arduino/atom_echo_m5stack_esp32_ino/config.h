@@ -5,11 +5,11 @@
 #define CONFIG_H
 
 // WiFi Settings
-const char* SSID = "KT_GiGA_3926";     // Your WiFi SSID
-const char* PASS = "fbx7bef119";        // Your WiFi Password
+extern const char* SSID;     // Your WiFi SSID
+extern const char* PASS;     // Your WiFi Password
 
 // Server Settings
-const char* SERVER_IP = "172.30.1.20";  // Server IP Address
-const uint16_t SERVER_PORT = 5001;      // Server Port
+extern const char* SERVER_IP;      // Server IP Address
+extern const uint16_t SERVER_PORT; // Server Port
 
 #endif // CONFIG_H

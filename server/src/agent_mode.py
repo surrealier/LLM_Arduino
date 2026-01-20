@@ -281,6 +281,7 @@ class AgentMode:
         try:
             import librosa
             import os
+            from audio_processor import normalize_to_dbfs, qc, trim_energy
 
             tmp_mp3 = "temp_tts.mp3"
 
@@ -299,26 +300,36 @@ class AgentMode:
                 return b""
 
             # 오디오 로드 및 리샘플링 (16kHz, mono)
-            data, sr = librosa.load(tmp_mp3, sr=16000, mono=True)
-            
-            # 정규화 및 볼륨 조정
-            # RMS 기반 정규화로 일관된 음량 유지
-            rms = np.sqrt(np.mean(data**2))
-            if rms > 1e-6:
-                # 목표 RMS: -20dBFS (적절한 음량)
-                target_rms = 10**(-20/20)  # 약 0.1
-                data = data * (target_rms / rms)
-            
-            # 클리핑 방지
-            data = np.clip(data, -0.95, 0.95)
-            
-            # 16-bit PCM 변환
-            pcm_16 = (data * 32767.0).astype(np.int16)
+            pcm_f32, sr = librosa.load(tmp_mp3, sr=16000, mono=True)
+
+            if pcm_f32.size == 0:
+                log.error("TTS audio empty after decoding: %s", tmp_mp3)
+                return b""
+
+            # DC 오프셋 제거 + 무음 구간 트림
+            pcm_f32 = (pcm_f32 - np.mean(pcm_f32)).astype(np.float32, copy=False)
+            pcm_f32 = trim_energy(pcm_f32, sr=sr, top_db=35.0, pad_ms=140)
+
+            # 가능한 크게 재생되도록 RMS 정규화 (클리핑 방지)
+            pcm_f32 = normalize_to_dbfs(pcm_f32, target_dbfs=-12.0, max_gain_db=24.0)
+            peak = float(np.max(np.abs(pcm_f32))) if pcm_f32.size else 0.0
+            if peak > 0.98:
+                pcm_f32 = (pcm_f32 / peak * 0.98).astype(np.float32, copy=False)
+
+            # 16-bit PCM 변환 (PCM16LE)
+            pcm_16 = (pcm_f32 * 32767.0).astype("<i2")
             audio_bytes = pcm_16.tobytes()
-            
-            log.info("TTS generated: %d bytes, %.2f seconds, RMS: %.4f", 
-                     len(audio_bytes), len(pcm_16) / 16000.0, rms)
-            
+
+            rms_db, peak, clip = qc(pcm_f32)
+            log.info(
+                "TTS generated: %d bytes, %.2f seconds, RMS: %.2f dBFS, peak: %.3f, clip: %.2f%%",
+                len(audio_bytes),
+                len(pcm_16) / 16000.0,
+                rms_db,
+                peak,
+                clip,
+            )
+
             return audio_bytes
         except ImportError:
             log.error("Install edge-tts, librosa, soundfile: pip install edge-tts librosa soundfile")

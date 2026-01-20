@@ -6,6 +6,19 @@
 #include <ESP32Servo.h>
 #include "config.h"
 
+// #region agent log helper
+static void debugLog(const char* location, const char* message, const char* hypothesisId, const char* dataJson = "{}") {
+  Serial.print("[DEBUG ");
+  Serial.print(location);
+  Serial.print(" H:");
+  Serial.print(hypothesisId);
+  Serial.print("] ");
+  Serial.print(message);
+  Serial.print(" | ");
+  Serial.println(dataJson);
+}
+// #endregion
+
 #define SERVO_PIN 25 // M5Atom Echo Grove Port (G21) - Check your wiring!
 Servo myServo;
 
@@ -143,13 +156,40 @@ static void manageConnections() {
         client.setNoDelay(true);
         Serial.println("✅ Server Connected!");
 
+        // #region agent log
+        char logData[256];
+        snprintf(logData, sizeof(logData), "{\"state\":\"%s\",\"speaker_playing\":%s,\"mic_enabled\":%s}", 
+          state == IDLE ? "IDLE" : "TALKING", 
+          M5.Speaker.isPlaying() ? "true" : "false",
+          M5.Mic.isEnabled() ? "true" : "false");
+        debugLog("ino:148", "Before reconnect reset", "B", logData);
+        // #endregion
+
         // Reset RX State to avoid desync
         rx_stage = RX_TYPE;
         rx_len = 0;
         rx_pos = 0;
         
-        // Ensure speaker is stopped so recording can proceed
+        // Force speaker reset - stop() alone is not enough when queue is full
         M5.Speaker.stop();
+        M5.Speaker.end();
+        delay(100);
+        M5.Speaker.begin();
+        M5.Speaker.setVolume(255);
+        
+        // Reset state machine to ensure recording can proceed
+        state = IDLE;
+        start_hit = 0;
+        talk_samples = 0;
+        silence_samples = 0;
+        
+        // #region agent log
+        snprintf(logData, sizeof(logData), "{\"state\":\"%s\",\"speaker_playing\":%s,\"rx_stage\":%d}", 
+          state == IDLE ? "IDLE" : "TALKING",
+          M5.Speaker.isPlaying() ? "true" : "false",
+          rx_stage);
+        debugLog("ino:164", "After reconnect reset", "B", logData);
+        // #endregion
 
         // Send a ping immediately to register
         sendPacket(PTYPE_PING, nullptr, 0);
@@ -366,6 +406,12 @@ static void pollServerPackets() {
     if (b < 0) {
       // 읽기 실패 시 연결 종료
       Serial.println("⚠️ Read failed - connection lost");
+      // #region agent log
+      char logData5[256];
+      snprintf(logData5, sizeof(logData5), "{\"rx_stage\":%d,\"state\":\"%s\",\"speaker_playing\":%s}", 
+        rx_stage, state == IDLE ? "IDLE" : "TALKING", M5.Speaker.isPlaying() ? "true" : "false");
+      debugLog("ino:402", "Connection lost during read", "E", logData5);
+      // #endregion
       client.stop();
       break;
     }
@@ -427,6 +473,13 @@ static void pollServerPackets() {
              
              // 패킷 완료 시 재생
              if (rx_pos >= rx_len) {
+                 // #region agent log
+                 char logData3[256];
+                 snprintf(logData3, sizeof(logData3), "{\"rx_len\":%d,\"sample_count\":%d,\"speaker_was_playing\":%s}", 
+                   rx_len, rx_len / sizeof(int16_t), M5.Speaker.isPlaying() ? "true" : "false");
+                 debugLog("ino:464", "Audio packet complete", "D,E", logData3);
+                 // #endregion
+                 
                  // 샘플 수 계산 (int16 = 2바이트)
                  size_t sample_count = rx_len / sizeof(int16_t);
                  if (sample_count > 0 && rx_len % sizeof(int16_t) == 0) {
@@ -440,8 +493,22 @@ static void pollServerPackets() {
                      // true = wait for previous to finish (큐잉)
                      // 볼륨을 약간 낮춰서 클리핑 방지 (0.95)
                      bool queued = M5.Speaker.playRaw((const int16_t*)rx_audio_buf, sample_count, SR, true, 0.95, false);
+                     
+                     // #region agent log
+                     char logData4[128];
+                     snprintf(logData4, sizeof(logData4), "{\"queued\":%s,\"speaker_playing_after\":%s}", 
+                       queued ? "true" : "false", M5.Speaker.isPlaying() ? "true" : "false");
+                     debugLog("ino:485", "Audio playback queued", "A,D", logData4);
+                     // #endregion
+                     
                      if (!queued) {
-                         Serial.println("⚠️ Audio queue full, dropped packet");
+                         Serial.println("⚠️ Audio queue full, dropped packet - resetting speaker");
+                         // Force speaker reset when queue is full
+                         M5.Speaker.stop();
+                         M5.Speaker.end();
+                         delay(50);
+                         M5.Speaker.begin();
+                         M5.Speaker.setVolume(255);
                      }
                  } else {
                      Serial.printf("⚠️ Invalid audio packet size: %d (not multiple of 2)\n", rx_len);
@@ -578,6 +645,19 @@ void setup() {
 void loop() {
   manageConnections();
 
+  // #region agent log
+  static uint32_t last_loop_log = 0;
+  if (millis() - last_loop_log > 2000) {  // Log every 2 seconds
+    char logData[256];
+    snprintf(logData, sizeof(logData), "{\"speaker_playing\":%s,\"mic_enabled\":%s,\"state\":\"%s\",\"client_connected\":%s}", 
+      M5.Speaker.isPlaying() ? "true" : "false",
+      M5.Mic.isEnabled() ? "true" : "false",
+      state == IDLE ? "IDLE" : "TALKING",
+      client.connected() ? "true" : "false");
+    debugLog("ino:615", "Loop status", "A,C", logData);
+    last_loop_log = millis();
+  }
+  // #endregion
 
   // ✅ (추가) 서버에서 오는 CMD 먼저 읽어서 출력
   pollServerPackets();
@@ -590,13 +670,41 @@ void loop() {
   // If we try to record while playing, it leads to feedback.
   // Ideally, if Speaker is busy, we shouldn't record or at least we should expect feedback.
   // But for now, let's just implement receive and play.
+  static uint32_t speaker_playing_start = 0;
   if (M5.Speaker.isPlaying()) {
-      // Don't record if speaker is playing to avoid echo loop
-      return;
+      if (speaker_playing_start == 0) {
+        speaker_playing_start = millis();
+      } else if (millis() - speaker_playing_start > 10000) {
+        // Speaker stuck for more than 10 seconds - force reset
+        Serial.println("⚠️ Speaker stuck - forcing reset");
+        // #region agent log
+        debugLog("ino:646", "Speaker stuck - forcing reset", "A", "{}");
+        // #endregion
+        M5.Speaker.stop();
+        M5.Speaker.end();
+        delay(50);
+        M5.Speaker.begin();
+        M5.Speaker.setVolume(255);
+        speaker_playing_start = 0;
+      } else {
+        // #region agent log
+        debugLog("ino:656", "Speaker playing - skipping record", "A", "{}");
+        // #endregion
+        // Don't record if speaker is playing to avoid echo loop
+        return;
+      }
+  } else {
+    speaker_playing_start = 0;
   }
 
   static int16_t samples[FRAME];
-  if (!M5.Mic.record(samples, FRAME)) return;
+  // #region agent log
+  bool record_success = M5.Mic.record(samples, FRAME);
+  char logData2[128];
+  snprintf(logData2, sizeof(logData2), "{\"record_success\":%s}", record_success ? "true" : "false");
+  debugLog("ino:651", "Mic.record called", "C", logData2);
+  // #endregion
+  if (!record_success) return;
 
   // 프리롤 채우기
   preroll_push(samples, FRAME);
@@ -608,11 +716,32 @@ void loop() {
 
     float vad_on = fmaxf(noise_floor * VAD_ON_MUL, noise_floor + 120.0f);
 
+    // #region agent log
+    static uint32_t last_vad_log = 0;
+    if (millis() - last_vad_log > 1000) {  // Log every 1 second
+      char logData7[256];
+      snprintf(logData7, sizeof(logData7), "{\"rms\":%.1f,\"noise_floor\":%.1f,\"vad_on\":%.1f,\"start_hit\":%d}", 
+        rms, noise_floor, vad_on, start_hit);
+      debugLog("ino:686", "VAD values", "F,G,H", logData7);
+      last_vad_log = millis();
+    }
+    // #endregion
+
     if (rms > vad_on) {
+      // #region agent log
+      char logData8[128];
+      snprintf(logData8, sizeof(logData8), "{\"rms\":%.1f,\"vad_on\":%.1f,\"start_hit\":%d}", rms, vad_on, start_hit);
+      debugLog("ino:698", "Voice detected", "F,G", logData8);
+      // #endregion
+      
       if (++start_hit >= 2) {
         state = TALKING;
         talk_samples = 0;
         silence_samples = 0;
+
+        // #region agent log
+        debugLog("ino:689", "State changed to TALKING", "B", "{}");
+        // #endregion
 
         Serial.println("🎙️ START");
         if (!sendPacket(0x01, nullptr, 0)) {
@@ -631,6 +760,13 @@ void loop() {
         talk_samples += FRAME;
       }
     } else {
+      if (start_hit > 0) {
+        // #region agent log
+        char logData9[128];
+        snprintf(logData9, sizeof(logData9), "{\"start_hit\":%d,\"rms\":%.1f,\"vad_on\":%.1f}", start_hit, rms, vad_on);
+        debugLog("ino:723", "start_hit reset", "G", logData9);
+        // #endregion
+      }
       start_hit = 0;
     }
     return;
@@ -655,6 +791,13 @@ void loop() {
   if ((talk_ms >= MIN_TALK_MS && silence_ms >= SILENCE_END_MS) || (talk_ms >= MAX_TALK_MS)) {
     state = IDLE;
     start_hit = 0;
+    
+    // #region agent log
+    char logData6[128];
+    snprintf(logData6, sizeof(logData6), "{\"talk_ms\":%lu,\"silence_ms\":%lu}", talk_ms, silence_ms);
+    debugLog("ino:739", "State changed to IDLE", "B", logData6);
+    // #endregion
+    
     Serial.println("🛑 END");
     sendPacket(0x03, nullptr, 0); // 실패해도 상태는 IDLE로 변경
   }

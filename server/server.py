@@ -15,6 +15,7 @@ from src.job_queue import JobQueue
 from src.logging_setup import get_performance_logger, setup_logging
 from src.protocol import (
     PTYPE_AUDIO,
+    PTYPE_AUDIO_OUT_END,
     PTYPE_END,
     PTYPE_PING,
     PTYPE_START,

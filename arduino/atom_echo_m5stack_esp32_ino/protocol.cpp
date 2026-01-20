@@ -7,7 +7,7 @@
 #include <stdlib.h>
 
 static constexpr size_t RX_MAX_PAYLOAD = 512;
-static constexpr size_t AUDIO_BUFFER_MAX = 32768;
+static constexpr size_t AUDIO_BUFFER_MAX = 524288;  // 512KB (충분히 큰 버퍼)
 
 enum RxStage { RX_TYPE, RX_LEN0, RX_LEN1, RX_PAYLOAD };
 static RxStage rx_stage = RX_TYPE;
@@ -17,6 +17,11 @@ static uint16_t rx_pos = 0;
 static uint8_t rx_buf[RX_MAX_PAYLOAD];
 static uint8_t* rx_audio_buf = nullptr;
 static size_t rx_audio_buf_size = 0;
+
+// 오디오 스트림 누적 버퍼
+static uint8_t* audio_stream_buf = nullptr;
+static size_t audio_stream_buf_size = 0;
+static size_t audio_stream_pos = 0;
 
 static uint32_t last_ping_ms = 0;
 static constexpr uint32_t PING_INTERVAL_MS = 3000;
@@ -91,15 +96,41 @@ static void handleAudioOut(const uint8_t* payload, uint16_t len) {
     return;
   }
   
-  size_t samples = len / 2;
-  const int16_t* pcm = (const int16_t*)payload;
+  // 버퍼에 누적 (즉시 재생하지 않음)
+  size_t needed = audio_stream_pos + len;
+  if (audio_stream_buf == nullptr || audio_stream_buf_size < needed) {
+    size_t new_size = (needed > AUDIO_BUFFER_MAX) ? needed : AUDIO_BUFFER_MAX;
+    uint8_t* new_buf = (uint8_t*)realloc(audio_stream_buf, new_size);
+    if (new_buf == nullptr) {
+      Serial.println("[AUDIO_OUT] Error: memory allocation failed");
+      return;
+    }
+    audio_stream_buf = new_buf;
+    audio_stream_buf_size = new_size;
+  }
   
-  Serial.printf("[AUDIO_OUT] Playing %d samples (%d bytes)\n", samples, len);
+  memcpy(audio_stream_buf + audio_stream_pos, payload, len);
+  audio_stream_pos += len;
+  
+  Serial.printf("[AUDIO_OUT] Buffered %d bytes (total: %d bytes)\n", len, audio_stream_pos);
+}
+
+static void handleAudioOutEnd() {
+  if (audio_stream_pos < 2) {
+    Serial.println("[AUDIO_OUT_END] No audio data to play");
+    audio_stream_pos = 0;
+    return;
+  }
+  
+  size_t samples = audio_stream_pos / 2;
+  const int16_t* pcm = (const int16_t*)audio_stream_buf;
+  
+  Serial.printf("[AUDIO_OUT_END] Playing %d samples (%d bytes) in one go\n", samples, audio_stream_pos);
   
   // 볼륨 최대로 확인
   M5.Speaker.setVolume(255);
   
-  // 오디오 재생 (블로킹 모드로 완전히 재생)
+  // 전체 오디오를 한 번에 재생 (블로킹 모드)
   M5.Speaker.playRaw(pcm, samples, 16000, false, 1, 0);
   
   // 재생 완료까지 대기
@@ -107,7 +138,10 @@ static void handleAudioOut(const uint8_t* payload, uint16_t len) {
     delay(1);
   }
   
-  Serial.println("[AUDIO_OUT] Playback complete");
+  Serial.println("[AUDIO_OUT_END] Playback complete");
+  
+  // 버퍼 초기화
+  audio_stream_pos = 0;
 }
 
 static void handleCmdJson(const uint8_t* payload, uint16_t len) {
@@ -168,6 +202,7 @@ void protocol_init() {
   rx_stage = RX_TYPE;
   rx_len = 0;
   rx_pos = 0;
+  audio_stream_pos = 0;
 }
 
 bool protocol_send_packet(WiFiClient& client, uint8_t type, const uint8_t* payload, uint16_t len) {
@@ -256,6 +291,8 @@ void protocol_poll(WiFiClient& client) {
             } else {
               handleAudioOut(rx_buf, rx_len);
             }
+          } else if (rx_type == PTYPE_AUDIO_OUT_END) {
+            handleAudioOutEnd();
           }
           rx_stage = RX_TYPE;
         }

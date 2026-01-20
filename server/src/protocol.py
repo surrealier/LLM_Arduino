@@ -14,6 +14,7 @@ PTYPE_PING = 0x10
 PTYPE_PONG = 0x1F
 PTYPE_CMD = 0x11
 PTYPE_AUDIO_OUT = 0x12
+PTYPE_AUDIO_OUT_END = 0x13
 
 
 def recv_exact(conn: socket.socket, n: int, max_timeouts: int = 20) -> Optional[bytes]:
@@ -107,6 +108,11 @@ def send_audio(conn: socket.socket, pcm_bytes: bytes, lock=None) -> bool:
     ok = send_packet(conn, PTYPE_AUDIO_OUT, pcm_bytes, lock=lock)
     if ok:
         log.info("AUDIO to ESP32: %s bytes", len(pcm_bytes))
+        # 오디오 전송 완료 신호 전송
+        end_ok = send_packet(conn, PTYPE_AUDIO_OUT_END, b"", lock=lock)
+        if end_ok:
+            log.info("AUDIO_OUT_END sent to ESP32")
+        return end_ok
     return ok
 
 

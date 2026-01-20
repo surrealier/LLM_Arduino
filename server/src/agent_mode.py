@@ -298,18 +298,26 @@ class AgentMode:
                 log.error("TTS file not created: %s", tmp_mp3)
                 return b""
 
-            data, _ = librosa.load(tmp_mp3, sr=16000, mono=True)
-            data = np.clip(data, -1.0, 1.0)
+            # 오디오 로드 및 리샘플링 (16kHz, mono)
+            data, sr = librosa.load(tmp_mp3, sr=16000, mono=True)
             
-            # 볼륨 증폭 (최대 음량으로)
-            max_val = np.max(np.abs(data))
-            if max_val > 0:
-                data = data / max_val * 0.95  # 클리핑 방지를 위해 0.95 사용
+            # 정규화 및 볼륨 조정
+            # RMS 기반 정규화로 일관된 음량 유지
+            rms = np.sqrt(np.mean(data**2))
+            if rms > 1e-6:
+                # 목표 RMS: -20dBFS (적절한 음량)
+                target_rms = 10**(-20/20)  # 약 0.1
+                data = data * (target_rms / rms)
             
-            pcm_16 = (data * 32767).astype(np.int16)
+            # 클리핑 방지
+            data = np.clip(data, -0.95, 0.95)
+            
+            # 16-bit PCM 변환
+            pcm_16 = (data * 32767.0).astype(np.int16)
             audio_bytes = pcm_16.tobytes()
             
-            log.info("TTS generated: %d bytes, %.2f seconds", len(audio_bytes), len(pcm_16) / 16000.0)
+            log.info("TTS generated: %d bytes, %.2f seconds, RMS: %.4f", 
+                     len(audio_bytes), len(pcm_16) / 16000.0, rms)
             
             return audio_bytes
         except ImportError:

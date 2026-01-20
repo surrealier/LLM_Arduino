@@ -91,6 +91,13 @@ static bool json_get_bool(const char* json, const char* key, bool* out) {
 }
 
 static void handleAudioOut(const uint8_t* payload, uint16_t len) {
+  // #region agent log
+  size_t free_heap_before = ESP.getFreeHeap();
+  size_t max_alloc_before = ESP.getMaxAllocHeap();
+  Serial.printf("[DEBUG_H1] handleAudioOut entry: free_heap=%d, max_alloc=%d, current_buf_size=%d, current_pos=%d\n", 
+                free_heap_before, max_alloc_before, audio_stream_buf_size, audio_stream_pos);
+  // #endregion
+  
   if (len < 2) {
     Serial.println("[AUDIO_OUT] Error: payload too short");
     return;
@@ -98,13 +105,35 @@ static void handleAudioOut(const uint8_t* payload, uint16_t len) {
   
   // 버퍼에 누적 (즉시 재생하지 않음)
   size_t needed = audio_stream_pos + len;
+  
+  // #region agent log
+  Serial.printf("[DEBUG_H2] needed=%d, len=%d, AUDIO_BUFFER_MAX=%d\n", needed, len, AUDIO_BUFFER_MAX);
+  // #endregion
+  
   if (audio_stream_buf == nullptr || audio_stream_buf_size < needed) {
     size_t new_size = (needed > AUDIO_BUFFER_MAX) ? needed : AUDIO_BUFFER_MAX;
+    
+    // #region agent log
+    Serial.printf("[DEBUG_H3] Before realloc: new_size=%d, old_size=%d, free_heap=%d, max_alloc=%d\n", 
+                  new_size, audio_stream_buf_size, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+    // #endregion
+    
     uint8_t* new_buf = (uint8_t*)realloc(audio_stream_buf, new_size);
     if (new_buf == nullptr) {
+      // #region agent log
+      Serial.printf("[DEBUG_H4] REALLOC FAILED: requested=%d, free_heap=%d, max_alloc=%d, old_buf=%p\n", 
+                    new_size, ESP.getFreeHeap(), ESP.getMaxAllocHeap(), audio_stream_buf);
+      // #endregion
+      
       Serial.println("[AUDIO_OUT] Error: memory allocation failed");
       return;
     }
+    
+    // #region agent log
+    Serial.printf("[DEBUG_H3] After realloc success: new_buf=%p, free_heap=%d\n", 
+                  new_buf, ESP.getFreeHeap());
+    // #endregion
+    
     audio_stream_buf = new_buf;
     audio_stream_buf_size = new_size;
   }
@@ -116,6 +145,11 @@ static void handleAudioOut(const uint8_t* payload, uint16_t len) {
 }
 
 static void handleAudioOutEnd() {
+  // #region agent log
+  Serial.printf("[DEBUG_H5] handleAudioOutEnd entry: audio_stream_pos=%d, buf_size=%d, free_heap=%d\n", 
+                audio_stream_pos, audio_stream_buf_size, ESP.getFreeHeap());
+  // #endregion
+  
   if (audio_stream_pos < 2) {
     Serial.println("[AUDIO_OUT_END] No audio data to play");
     audio_stream_pos = 0;
@@ -142,6 +176,11 @@ static void handleAudioOutEnd() {
   
   // 버퍼 초기화
   audio_stream_pos = 0;
+  
+  // #region agent log
+  Serial.printf("[DEBUG_H5] After playback: audio_stream_pos=%d, free_heap=%d\n", 
+                audio_stream_pos, ESP.getFreeHeap());
+  // #endregion
 }
 
 static void handleCmdJson(const uint8_t* payload, uint16_t len) {
@@ -203,6 +242,11 @@ void protocol_init() {
   rx_len = 0;
   rx_pos = 0;
   audio_stream_pos = 0;
+  
+  // #region agent log
+  Serial.printf("[DEBUG_H1] protocol_init: free_heap=%d, max_alloc=%d\n", 
+                ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+  // #endregion
 }
 
 bool protocol_send_packet(WiFiClient& client, uint8_t type, const uint8_t* payload, uint16_t len) {
@@ -262,10 +306,20 @@ void protocol_poll(WiFiClient& client) {
         } else {
           rx_stage = RX_PAYLOAD;
           if (rx_type == PTYPE_AUDIO_OUT && rx_len > RX_MAX_PAYLOAD) {
+            // #region agent log
+            Serial.printf("[DEBUG_H4] Large AUDIO_OUT packet: rx_len=%d, current_rx_audio_buf_size=%d, free_heap=%d\n", 
+                          rx_len, rx_audio_buf_size, ESP.getFreeHeap());
+            // #endregion
+            
             if (rx_audio_buf == nullptr || rx_audio_buf_size < rx_len) {
               if (rx_audio_buf) free(rx_audio_buf);
               rx_audio_buf = (uint8_t*)malloc(rx_len);
               rx_audio_buf_size = rx_len;
+              
+              // #region agent log
+              Serial.printf("[DEBUG_H4] rx_audio_buf malloc: requested=%d, result=%p, free_heap=%d\n", 
+                            rx_len, rx_audio_buf, ESP.getFreeHeap());
+              // #endregion
             }
           }
         }

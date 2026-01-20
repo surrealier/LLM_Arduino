@@ -105,6 +105,12 @@ def send_action(conn: socket.socket, action_dict: dict, lock=None) -> bool:
 
 
 def send_audio(conn: socket.socket, pcm_bytes: bytes, lock=None) -> bool:
+    # #region agent log
+    import json
+    with open('/Users/b__ono__ng/Main/Projects/LLM_Adruino/.cursor/debug.log', 'a', encoding='utf-8') as f:
+        f.write(json.dumps({"location":"protocol.py:107","message":"send_audio called","data":{"pcm_bytes_len":len(pcm_bytes),"samples":len(pcm_bytes)//2,"duration_sec":len(pcm_bytes)/2/16000},"timestamp":int(time.time()*1000),"sessionId":"debug-session","hypothesisId":"H2"}) + '\n')
+    # #endregion
+    
     ok = send_packet(conn, PTYPE_AUDIO_OUT, pcm_bytes, lock=lock)
     if ok:
         log.info("AUDIO to ESP32: %s bytes", len(pcm_bytes))

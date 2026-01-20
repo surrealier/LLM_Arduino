@@ -54,6 +54,17 @@ class Config:
             "level": "INFO",
             "save_to_file": True,
             "log_dir": "logs"
+        },
+        "connection": {
+            "socket_timeout": 0.5
+        },
+        "queue": {
+            "stt_maxsize": 4,
+            "tts_maxsize": 2,
+            "command_maxsize": 10
+        },
+        "audio": {
+            "max_seconds": 12
         }
     }
     

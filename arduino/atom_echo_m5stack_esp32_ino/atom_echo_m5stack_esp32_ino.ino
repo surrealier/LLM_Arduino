@@ -49,7 +49,7 @@ void setup() {
   auto spk_cfg = M5.Speaker.config();
   M5.Speaker.config(spk_cfg);
   M5.Speaker.begin();
-  M5.Speaker.setVolume(200);
+  M5.Speaker.setVolume(255);  // 최대 볼륨으로 설정
 
   auto mic_cfg = M5.Mic.config();
   mic_cfg.sample_rate = SR;

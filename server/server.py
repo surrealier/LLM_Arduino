@@ -184,18 +184,28 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
                     if not text:
                         continue
 
+                    log.info("Agent Mode: Processing text: %s", text)
+                    
                     llm_start = time.time()
                     response = agent_handler.generate_response(text)
                     perf_logger.log_llm(time.time() - llm_start)
 
                     if response:
+                        log.info("Agent Response: %s", response)
                         tts_start = time.time()
                         wav_bytes = agent_handler.text_to_audio(response)
                         perf_logger.log_tts(time.time() - tts_start)
                         if wav_bytes:
-                            send_audio(conn, wav_bytes, send_lock)
+                            log.info("Sending audio to device: %d bytes", len(wav_bytes))
+                            success = send_audio(conn, wav_bytes, send_lock)
+                            if success:
+                                log.info("Audio sent successfully")
+                            else:
+                                log.error("Failed to send audio to device")
                         else:
                             log.error("TTS returned empty bytes")
+                    else:
+                        log.error("Agent generated empty response")
 
             except Exception as exc:
                 log.exception("Worker error processing sid=%s: %s", sid, exc)

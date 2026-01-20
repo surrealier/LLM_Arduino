@@ -280,8 +280,11 @@ class AgentMode:
     def text_to_audio(self, text: str):
         try:
             import librosa
+            import os
 
             tmp_mp3 = "temp_tts.mp3"
+
+            log.info("Generating TTS for: %s", text[:50])
 
             try:
                 loop = asyncio.get_event_loop()
@@ -291,13 +294,27 @@ class AgentMode:
 
             loop.run_until_complete(self._tts_gen(text, tmp_mp3))
 
+            if not os.path.exists(tmp_mp3):
+                log.error("TTS file not created: %s", tmp_mp3)
+                return b""
+
             data, _ = librosa.load(tmp_mp3, sr=16000, mono=True)
             data = np.clip(data, -1.0, 1.0)
+            
+            # 볼륨 증폭 (최대 음량으로)
+            max_val = np.max(np.abs(data))
+            if max_val > 0:
+                data = data / max_val * 0.95  # 클리핑 방지를 위해 0.95 사용
+            
             pcm_16 = (data * 32767).astype(np.int16)
-            return pcm_16.tobytes()
+            audio_bytes = pcm_16.tobytes()
+            
+            log.info("TTS generated: %d bytes, %.2f seconds", len(audio_bytes), len(pcm_16) / 16000.0)
+            
+            return audio_bytes
         except ImportError:
             log.error("Install edge-tts, librosa, soundfile: pip install edge-tts librosa soundfile")
             return b""
         except Exception as exc:
-            log.error("TTS failed: %s", exc)
+            log.error("TTS failed: %s", exc, exc_info=True)
             return b""

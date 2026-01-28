@@ -36,7 +36,7 @@ SR = 16000
 UNSURE_POLICY = "NOOP"
 
 ACTIONS_CONFIG = []
-current_mode = "robot"
+current_mode = "agent"  # 디폴트 모드: agent
 
 robot_handler = None
 agent_handler = None
@@ -120,10 +120,11 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
                 pcm = trim_energy(pcm, SR)
                 pcm = normalize_to_dbfs(pcm, target_dbfs=-22.0)
 
-                ts = time.strftime("%Y%m%d_%H%M%S")
-                wav_path = f"wav_logs/sid{sid}_{ts}_{len(pcm)/SR:.2f}s.wav"
-                save_wav(wav_path, pcm, SR)
-                log.info("Saved wav: %s", wav_path)
+                # 녹음 파일 저장 비활성화
+                # ts = time.strftime("%Y%m%d_%H%M%S")
+                # wav_path = f"wav_logs/sid{sid}_{ts}_{len(pcm)/SR:.2f}s.wav"
+                # save_wav(wav_path, pcm, SR)
+                # log.info("Saved wav: %s", wav_path)
 
                 text = ""
                 try:
@@ -149,8 +150,11 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
                 if meaningful and sys_action.get("action") == "SWITCH_MODE":
                     new_mode = sys_action.get("mode")
                     if new_mode in ["robot", "agent"]:
+                        old_mode = current_mode
                         current_mode = new_mode
-                        log.info("Mode switched to: %s", current_mode)
+                        log.info("=" * 50)
+                        log.info("모드 변경: %s -> %s", old_mode.upper(), current_mode.upper())
+                        log.info("=" * 50)
 
                         notify_text = f"{new_mode} 모드로 변경되었습니다."
                         if current_mode == "agent":
@@ -184,18 +188,28 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
                     if not text:
                         continue
 
+                    log.info("Agent Mode: Processing text: %s", text)
+                    
                     llm_start = time.time()
                     response = agent_handler.generate_response(text)
                     perf_logger.log_llm(time.time() - llm_start)
 
                     if response:
+                        log.info("Agent Response: %s", response)
                         tts_start = time.time()
                         wav_bytes = agent_handler.text_to_audio(response)
                         perf_logger.log_tts(time.time() - tts_start)
                         if wav_bytes:
-                            send_audio(conn, wav_bytes, send_lock)
+                            log.info("Sending audio to device: %d bytes", len(wav_bytes))
+                            success = send_audio(conn, wav_bytes, send_lock)
+                            if success:
+                                log.info("Audio sent successfully")
+                            else:
+                                log.error("Failed to send audio to device")
                         else:
                             log.error("TTS returned empty bytes")
+                    else:
+                        log.error("Agent generated empty response")
 
             except Exception as exc:
                 log.exception("Worker error processing sid=%s: %s", sid, exc)

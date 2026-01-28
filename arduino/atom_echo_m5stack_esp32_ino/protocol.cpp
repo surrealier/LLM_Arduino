@@ -85,10 +85,28 @@ static bool json_get_bool(const char* json, const char* key, bool* out) {
 }
 
 static void handleAudioOut(const uint8_t* payload, uint16_t len) {
-  if (len < 2) return;
+  if (len < 2) {
+    Serial.println("[AUDIO_OUT] Error: payload too short");
+    return;
+  }
+  
   size_t samples = len / 2;
   const int16_t* pcm = (const int16_t*)payload;
-  M5.Speaker.playRaw(pcm, samples, AUDIO_SAMPLE_RATE, true, 1);
+  
+  Serial.printf("[AUDIO_OUT] Playing %d samples (%d bytes)\n", samples, len);
+  
+  // 볼륨 최대로 확인
+  M5.Speaker.setVolume(255);
+  
+  // 오디오 재생 (블로킹 모드로 완전히 재생)
+  M5.Speaker.playRaw(pcm, samples, 16000, false, 1, 0);
+  
+  // 재생 완료까지 대기
+  while (M5.Speaker.isPlaying()) {
+    delay(1);
+  }
+  
+  Serial.println("[AUDIO_OUT] Playback complete");
 }
 
 static void handleCmdJson(const uint8_t* payload, uint16_t len) {

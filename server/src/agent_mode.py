@@ -281,8 +281,11 @@ class AgentMode:
         try:
             import librosa
             import os
+            from audio_processor import normalize_to_dbfs, qc, trim_energy
 
             tmp_mp3 = "temp_tts.mp3"
+
+            log.info("Generating TTS for: %s", text[:50])
 
             try:
                 loop = asyncio.get_event_loop()
@@ -294,19 +297,45 @@ class AgentMode:
 
             loop.run_until_complete(self._tts_gen(text, tmp_mp3))
 
-            data, _ = librosa.load(tmp_mp3, sr=16000, mono=True)
-            data = np.clip(data, -1.0, 1.0)
-            pcm_16 = (data * 32767).astype(np.int16)
-            
-            # Clean up temp file
-            try:
-                os.remove(tmp_mp3)
-            except Exception:
-                pass
-            return pcm_16.tobytes()
+            if not os.path.exists(tmp_mp3):
+                log.error("TTS file not created: %s", tmp_mp3)
+                return b""
+
+            # 오디오 로드 및 리샘플링 (16kHz, mono)
+            pcm_f32, sr = librosa.load(tmp_mp3, sr=16000, mono=True)
+
+            if pcm_f32.size == 0:
+                log.error("TTS audio empty after decoding: %s", tmp_mp3)
+                return b""
+
+            # DC 오프셋 제거 + 무음 구간 트림
+            pcm_f32 = (pcm_f32 - np.mean(pcm_f32)).astype(np.float32, copy=False)
+            pcm_f32 = trim_energy(pcm_f32, sr=sr, top_db=35.0, pad_ms=140)
+
+            # 가능한 크게 재생되도록 RMS 정규화 (클리핑 방지)
+            pcm_f32 = normalize_to_dbfs(pcm_f32, target_dbfs=-12.0, max_gain_db=24.0)
+            peak = float(np.max(np.abs(pcm_f32))) if pcm_f32.size else 0.0
+            if peak > 0.98:
+                pcm_f32 = (pcm_f32 / peak * 0.98).astype(np.float32, copy=False)
+
+            # 16-bit PCM 변환 (PCM16LE)
+            pcm_16 = (pcm_f32 * 32767.0).astype("<i2")
+            audio_bytes = pcm_16.tobytes()
+
+            rms_db, peak, clip = qc(pcm_f32)
+            log.info(
+                "TTS generated: %d bytes, %.2f seconds, RMS: %.2f dBFS, peak: %.3f, clip: %.2f%%",
+                len(audio_bytes),
+                len(pcm_16) / 16000.0,
+                rms_db,
+                peak,
+                clip,
+            )
+
+            return audio_bytes
         except ImportError:
             log.error("Install edge-tts, librosa, soundfile: pip install edge-tts librosa soundfile")
             return b""
         except Exception as exc:
-            log.error("TTS failed: %s", exc)
+            log.error("TTS failed: %s", exc, exc_info=True)
             return b""

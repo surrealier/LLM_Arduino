@@ -9,6 +9,17 @@
 #include "servo_control.h"
 #include "vad.h"
 
+#define SERVO_PIN 25
+
+// Config variable definitions
+const char* SSID = "KT_GiGA_3926";
+const char* PASS = "fbx7bef119";
+const char* SERVER_IP = "172.30.1.20";
+const uint16_t SERVER_PORT = 5001;
+
+static constexpr uint32_t SR = 16000;
+static constexpr size_t FRAME = 320;
+
 WiFiClient client;
 ConnectionState conn_state;
 VadState vad_state;
@@ -29,6 +40,7 @@ void setup() {
   Serial.begin(115200);
   delay(500);
 
+  led_init();
   servo_init(SERVO_PIN);
   led_set_color(LED_COLOR_CONNECTING_R, LED_COLOR_CONNECTING_G, LED_COLOR_CONNECTING_B);
 
@@ -37,7 +49,7 @@ void setup() {
   auto spk_cfg = M5.Speaker.config();
   M5.Speaker.config(spk_cfg);
   M5.Speaker.begin();
-  M5.Speaker.setVolume(200);
+  M5.Speaker.setVolume(255);  // 최대 볼륨으로 설정
 
   auto mic_cfg = M5.Mic.config();
   mic_cfg.sample_rate = AUDIO_SAMPLE_RATE;

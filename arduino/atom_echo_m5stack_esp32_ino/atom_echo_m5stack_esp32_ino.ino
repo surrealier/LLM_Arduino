@@ -42,7 +42,7 @@ void setup() {
 
   led_init();
   servo_init(SERVO_PIN);
-  led_set_color(255, 0, 0);
+  led_set_color(LED_COLOR_CONNECTING_R, LED_COLOR_CONNECTING_G, LED_COLOR_CONNECTING_B);
 
   connection_init(&conn_state, SSID, PASS);
 
@@ -52,7 +52,7 @@ void setup() {
   M5.Speaker.setVolume(255);  // 최대 볼륨으로 설정
 
   auto mic_cfg = M5.Mic.config();
-  mic_cfg.sample_rate = SR;
+  mic_cfg.sample_rate = AUDIO_SAMPLE_RATE;
   M5.Mic.config(mic_cfg);
   M5.Mic.begin();
 
@@ -74,30 +74,31 @@ void loop() {
   protocol_poll(client);
 
   if (M5.Mic.isEnabled()) {
-    static int16_t frame_buf[FRAME];
-    if (M5.Mic.record(frame_buf, FRAME, SR)) {
-      float rms = frame_rms(frame_buf, FRAME);
+    static int16_t frame_buf[AUDIO_FRAME_SIZE];
+    if (M5.Mic.record(frame_buf, AUDIO_FRAME_SIZE, AUDIO_SAMPLE_RATE)) {
+      float rms = frame_rms(frame_buf, AUDIO_FRAME_SIZE);
 
       if (!vad_state.talking) {
-        preroll_push(&preroll, frame_buf, FRAME);
+        preroll_push(&preroll, frame_buf, AUDIO_FRAME_SIZE);
       }
 
-      VadEvent event = vad_update(&vad_state, rms, FRAME, SR);
+      VadEvent event = vad_update(&vad_state, rms, AUDIO_FRAME_SIZE, AUDIO_SAMPLE_RATE);
 
       if (event == VAD_START) {
-        led_set_color(0, 255, 0);
+        led_set_color(LED_COLOR_RECORDING_R, LED_COLOR_RECORDING_G, LED_COLOR_RECORDING_B);
         if (protocol_send_packet(client, PTYPE_START, nullptr, 0)) {
           preroll_send(&preroll, client);
         }
       } else if (event == VAD_CONTINUE) {
-        protocol_send_packet(client, PTYPE_AUDIO, (uint8_t*)frame_buf, FRAME * sizeof(int16_t));
+        protocol_send_packet(client, PTYPE_AUDIO, (uint8_t*)frame_buf, AUDIO_FRAME_SIZE * sizeof(int16_t));
       } else if (event == VAD_END) {
         protocol_send_packet(client, PTYPE_END, nullptr, 0);
-        led_set_color(0, 0, 255);
+        led_set_color(LED_COLOR_IDLE_R, LED_COLOR_IDLE_G, LED_COLOR_IDLE_B);
       }
     }
   }
 
   led_update_pattern();
+  servo_update();
   delay(1);
 }

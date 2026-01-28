@@ -1,2 +1,4 @@
 wav_logs/
 *.wav
+
+*.pyc

@@ -1,4 +1,5 @@
 #include "protocol.h"
+#include "config.h"
 #include "led_control.h"
 #include "servo_control.h"
 #include <M5Unified.h>
@@ -7,7 +8,6 @@
 #include <stdlib.h>
 
 static constexpr size_t RX_MAX_PAYLOAD = 512;
-static constexpr size_t AUDIO_BUFFER_MAX = 32768;
 
 enum RxStage { RX_TYPE, RX_LEN0, RX_LEN1, RX_PAYLOAD };
 static RxStage rx_stage = RX_TYPE;
@@ -19,7 +19,6 @@ static uint8_t* rx_audio_buf = nullptr;
 static size_t rx_audio_buf_size = 0;
 
 static uint32_t last_ping_ms = 0;
-static constexpr uint32_t PING_INTERVAL_MS = 3000;
 
 static bool json_get_string(const char* json, const char* key, char* out, size_t out_sz) {
   char pat[64];
@@ -88,8 +87,8 @@ static bool json_get_bool(const char* json, const char* key, bool* out) {
 static void handleAudioOut(const uint8_t* payload, uint16_t len) {
   if (len < 2) return;
   size_t samples = len / 2;
-  int16_t* pcm = (int16_t*)payload;
-  M5.Speaker.playRaw((const int16_t*)pcm, samples, 16000, true, 1);
+  const int16_t* pcm = (const int16_t*)payload;
+  M5.Speaker.playRaw(pcm, samples, AUDIO_SAMPLE_RATE, true, 1);
 }
 
 static void handleCmdJson(const uint8_t* payload, uint16_t len) {
@@ -120,10 +119,9 @@ static void handleCmdJson(const uint8_t* payload, uint16_t len) {
       servo_wiggle();
     } else if (strcmp(servo_action, "NOD") == 0) {
       servo_set_angle(110);
-      delay(200);
-      servo_set_angle(90);
+      servo_set_angle(SERVO_CENTER_ANGLE);
     } else if (strcmp(servo_action, "CENTER") == 0) {
-      servo_set_angle(90);
+      servo_set_angle(SERVO_CENTER_ANGLE);
     }
     return;
   }
@@ -141,8 +139,6 @@ static void handleCmdJson(const uint8_t* payload, uint16_t len) {
     servo_stop();
   } else if (strcmp(action, "SERVO_SET") == 0 && has_angle) {
     servo_set_angle(angle);
-    delay(3000);
-    servo_stop();
   }
 }
 

@@ -280,11 +280,14 @@ class AgentMode:
     def text_to_audio(self, text: str):
         try:
             import librosa
+            import os
 
             tmp_mp3 = "temp_tts.mp3"
 
             try:
                 loop = asyncio.get_event_loop()
+                if loop.is_closed():
+                    raise RuntimeError("Event loop is closed")
             except RuntimeError:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
@@ -294,6 +297,12 @@ class AgentMode:
             data, _ = librosa.load(tmp_mp3, sr=16000, mono=True)
             data = np.clip(data, -1.0, 1.0)
             pcm_16 = (data * 32767).astype(np.int16)
+            
+            # Clean up temp file
+            try:
+                os.remove(tmp_mp3)
+            except Exception:
+                pass
             return pcm_16.tobytes()
         except ImportError:
             log.error("Install edge-tts, librosa, soundfile: pip install edge-tts librosa soundfile")

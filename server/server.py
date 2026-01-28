@@ -273,6 +273,9 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
         job_queue.put(job_queue.stt_queue, None, drop_oldest=False)
     except Exception:
         pass
+    
+    worker_thread.join(timeout=2)
+    log.info("Connection closed: %s", addr)
 
 
 def main():

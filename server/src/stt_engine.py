@@ -21,7 +21,7 @@ class STTEngine:
         m = WhisperModel(
             self.model_size,
             device=device,
-            compute_type=("int8" if device == "cpu" else "int8"),
+            compute_type=("int8" if device == "cpu" else "float16"),
             cpu_threads=1,
             num_workers=1,
         )

@@ -4,10 +4,9 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <WiFi.h>
+#include "config.h"
 
-static constexpr uint32_t AB_SR = 16000;
-static constexpr uint32_t PREROLL_MS = 200;
-static constexpr size_t PREROLL_SAMPLES = (AB_SR * PREROLL_MS) / 1000;
+static constexpr size_t PREROLL_SAMPLES = (AUDIO_SAMPLE_RATE * PREROLL_MS) / 1000;
 
 struct PrerollBuffer {
   int16_t buf[PREROLL_SAMPLES];

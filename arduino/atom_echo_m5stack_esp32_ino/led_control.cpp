@@ -2,7 +2,7 @@
 #include <string.h>
 
 void led_set_color(uint8_t r, uint8_t g, uint8_t b) {
-  M5.dis.fillpix(M5.dis.color565(r, g, b));
+  M5.dis.drawpix(0, M5.dis.color565(r, g, b));
 }
 
 void led_show_emotion(const char* emotion) {

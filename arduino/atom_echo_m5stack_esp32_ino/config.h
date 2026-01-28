@@ -1,15 +1,70 @@
-// WiFi Configuration
-// Copy this file and rename to config.h, then fill in your credentials
+// Configuration for M5Stack Atom Echo Home Agent
+// Copy config.h.example to config.h and fill in your credentials
 
 #ifndef CONFIG_H
 #define CONFIG_H
 
+// ============================================
 // WiFi Settings
-const char* SSID = "KT_GiGA_3926";     // Your WiFi SSID
-const char* PASS = "fbx7bef119";        // Your WiFi Password
+// ============================================
+const char* SSID = "KT_GiGA_3926";      // Your WiFi SSID
+const char* PASS = "fbx7bef119";         // Your WiFi Password
 
+// ============================================
 // Server Settings
-const char* SERVER_IP = "172.30.1.20";  // Server IP Address
-const uint16_t SERVER_PORT = 5001;      // Server Port
+// ============================================
+const char* SERVER_IP = "172.30.1.20";   // Server IP Address
+const uint16_t SERVER_PORT = 5001;       // Server Port
+
+// ============================================
+// Servo Settings
+// ============================================
+#define SERVO_PIN 25                     // GPIO pin for servo
+#define SERVO_MIN_ANGLE 0                // Minimum servo angle
+#define SERVO_MAX_ANGLE 180              // Maximum servo angle
+#define SERVO_CENTER_ANGLE 90            // Center position
+
+// ============================================
+// VAD (Voice Activity Detection) Settings
+// ============================================
+#define VAD_NOISE_ALPHA 0.995f           // Noise floor smoothing (0.99-0.999)
+#define VAD_ON_MULTIPLIER 3.0f           // Voice detection threshold multiplier
+#define VAD_OFF_MULTIPLIER 1.8f          // Silence detection threshold multiplier
+#define VAD_MIN_TALK_MS 500              // Minimum speech duration (ms)
+#define VAD_SILENCE_END_MS 350           // Silence duration to end speech (ms)
+#define VAD_MAX_TALK_MS 8000             // Maximum speech duration (ms)
+#define VAD_INITIAL_NOISE_FLOOR 120.0f   // Initial noise floor estimate
+
+// ============================================
+// Audio Settings
+// ============================================
+#define AUDIO_SAMPLE_RATE 16000          // Sample rate (Hz)
+#define AUDIO_FRAME_SIZE 320             // Samples per frame (20ms at 16kHz)
+#define PREROLL_MS 200                   // Pre-roll buffer duration (ms)
+
+// ============================================
+// Connection Settings
+// ============================================
+#define WIFI_RECONNECT_INTERVAL_MS 5000  // WiFi reconnection interval (ms)
+#define PING_INTERVAL_MS 3000            // Server ping interval (ms)
+
+// ============================================
+// LED Colors (RGB)
+// ============================================
+#define LED_COLOR_CONNECTING_R 255
+#define LED_COLOR_CONNECTING_G 0
+#define LED_COLOR_CONNECTING_B 0
+
+#define LED_COLOR_IDLE_R 0
+#define LED_COLOR_IDLE_G 0
+#define LED_COLOR_IDLE_B 255
+
+#define LED_COLOR_RECORDING_R 0
+#define LED_COLOR_RECORDING_G 255
+#define LED_COLOR_RECORDING_B 0
+
+#define LED_COLOR_PLAYING_R 255
+#define LED_COLOR_PLAYING_G 255
+#define LED_COLOR_PLAYING_B 0
 
 #endif // CONFIG_H

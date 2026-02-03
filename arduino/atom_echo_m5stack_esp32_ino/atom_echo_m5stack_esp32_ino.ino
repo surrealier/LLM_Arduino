@@ -63,6 +63,21 @@ void setup() {
 
 void loop() {
   M5.update();
+  
+  // 버튼 누르면 TTS 재생 중단 (인터럽트 기능)
+  #ifndef ENABLE_BUTTON_INTERRUPT
+  #define ENABLE_BUTTON_INTERRUPT 1
+  #endif
+  
+  #if ENABLE_BUTTON_INTERRUPT
+  if (M5.BtnA.wasPressed()) {
+    if (protocol_is_audio_playing()) {
+      protocol_clear_audio_buffer();
+      Serial.println("[BUTTON] TTS playback interrupted by user");
+    }
+  }
+  #endif
+  
   connection_manage(&conn_state, client);
 
   if (!connection_is_server_connected(&conn_state)) {
@@ -72,8 +87,29 @@ void loop() {
 
   protocol_send_ping_if_needed(client);
   protocol_poll(client);
+  protocol_audio_process();  // 오디오 스트리밍 처리
 
-  if (M5.Mic.isEnabled()) {
+  // TTS 재생 중인지 확인
+  bool is_playing = protocol_is_audio_playing();
+  
+  // Half-duplex: TTS 재생 중에는 마이크 비활성화
+  if (is_playing && M5.Mic.isEnabled()) {
+    M5.Mic.end();
+    Serial.println("[MIC] Disabled during TTS playback");
+    // VAD 상태 초기화
+    vad_init(&vad_state);
+    preroll_init(&preroll);
+  } else if (!is_playing && !M5.Mic.isEnabled()) {
+    // TTS 재생 완료 후 마이크 재활성화
+    auto mic_cfg = M5.Mic.config();
+    mic_cfg.sample_rate = AUDIO_SAMPLE_RATE;
+    M5.Mic.config(mic_cfg);
+    M5.Mic.begin();
+    Serial.println("[MIC] Re-enabled after TTS playback");
+  }
+
+  // 마이크가 활성화되어 있고 TTS가 재생 중이 아닐 때만 음성 입력 처리
+  if (M5.Mic.isEnabled() && !is_playing) {
     static int16_t frame_buf[AUDIO_FRAME_SIZE];
     if (M5.Mic.record(frame_buf, AUDIO_FRAME_SIZE, AUDIO_SAMPLE_RATE)) {
       float rms = frame_rms(frame_buf, AUDIO_FRAME_SIZE);

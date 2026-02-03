@@ -1,0 +1,202 @@
+---
+description: Arduino .ino 파일 작업 시 문법 및 코드 검증 규칙
+globs: **/*.ino
+alwaysApply: false
+---
+
+# Arduino .ino 파일 작업 규칙
+
+## ⚠️ 최우선 원칙: Arduino 문법 준수
+
+### 모든 .ino 파일 수정 전 필수 확인 사항
+
+**❌ 자주 발생하는 문법 오류**
+
+```cpp
+// ❌ C++ 표준 라이브러리 사용 (Arduino에서 불가)
+#include <vector>
+#include <string>
+std::vector<int> data;
+
+// ❌ Arduino에서 지원하지 않는 함수
+std::to_string(value);
+std::bind();
+
+// ❌ 잘못된 메모리 관리
+char* buffer = new char[1024];  // delete 없이 사용
+
+// ❌ 부적절한 전역 변수 초기화
+WiFiClient client = WiFiClient();  // setup()에서 초기화해야 함
+```
+
+**✅ Arduino 호환 코드**
+
+```cpp
+// ✅ Arduino String 사용
+String message = "Hello";
+message += String(value);
+
+// ✅ 적절한 메모리 관리
+uint8_t buffer[1024];
+memset(buffer, 0, sizeof(buffer));
+
+// ✅ 전역 변수는 선언만, setup()에서 초기화
+WiFiClient client;
+
+void setup() {
+    client = WiFiClient();
+}
+```
+
+## 📋 .ino 파일 수정 체크리스트
+
+### 코드 작성 후 반드시 확인할 사항
+
+- [ ] **Arduino 표준 라이브러리만 사용**
+  - `WiFi.h`, `WebSocketsClient.h`, `M5Atom.h` 등
+  - C++ STL 라이브러리 사용하지 않음
+
+- [ ] **메모리 관리**
+  - 동적 할당 최소화
+  - 스택 크기 고려 (ESP32: 8KB 기본)
+  - 전역 배열 크기 적절히 제한
+
+- [ ] **함수 시그니처**
+  - `setup()` 및 `loop()` 존재
+  - 함수 선언 순서 (Arduino는 위에서 아래로 파싱)
+
+- [ ] **타입 사용**
+  - `uint8_t`, `uint16_t`, `uint32_t` 사용
+  - `int`, `long` 대신 명시적 크기 타입 선호
+
+- [ ] **문자열 처리**
+  - `String` 클래스 또는 `char[]` 사용
+  - `std::string` 사용 금지
+
+## 🔍 Arduino ESP32 특화 사항
+
+### ESP32 플랫폼 특성
+
+```cpp
+// ✅ ESP32 Task 사용
+xTaskCreate(
+    audioTask,
+    "AudioTask",
+    8192,  // 스택 크기
+    NULL,
+    1,     // 우선순위
+    &audioTaskHandle
+);
+
+// ✅ PSRAM 사용 시 명시
+#ifdef BOARD_HAS_PSRAM
+    uint8_t* largeBuffer = (uint8_t*)ps_malloc(32768);
+#endif
+
+// ✅ 적절한 delay 사용
+delay(10);        // ms 단위
+delayMicroseconds(500);  // μs 단위
+vTaskDelay(pdMS_TO_TICKS(10));  // FreeRTOS Task
+```
+
+### WiFi 연결 패턴
+
+```cpp
+// ✅ 안정적인 WiFi 연결
+void connectWiFi() {
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid, password);
+    
+    int attempts = 0;
+    while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+        delay(500);
+        Serial.print(".");
+        attempts++;
+    }
+    
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.println("\nWiFi 연결됨");
+        Serial.println(WiFi.localIP());
+    }
+}
+```
+
+## 🚫 절대 금지 사항
+
+### 이러한 코드는 컴파일 오류를 발생시킵니다
+
+```cpp
+// ❌ RTTI 기능
+typeid(obj)
+dynamic_cast<Type*>(ptr)
+
+// ❌ 예외 처리 (ESP32에서 제한적)
+try { } catch { }  // 가능하지만 권장하지 않음
+
+// ❌ 표준 입출력
+std::cout << "message";
+std::cin >> value;
+
+// ❌ 파일 시스템 (적절한 라이브러리 없이)
+fopen(), fread(), fwrite()
+
+// ✅ 대신 사용
+Serial.println("message");
+SPIFFS.open("/file.txt");
+```
+
+## ✅ 검증 프로세스
+
+### .ino 파일 수정 후 필수 절차
+
+1. **문법 검사**
+   - Arduino IDE 또는 PlatformIO로 컴파일
+   - 모든 경고 메시지 확인 및 해결
+
+2. **메모리 사용 확인**
+   ```
+   Sketch uses 850232 bytes (64%) of program storage space.
+   Global variables use 45672 bytes (13%) of dynamic memory.
+   ```
+   - 프로그램 저장: < 80%
+   - 동적 메모리: < 70%
+
+3. **실제 하드웨어 테스트**
+   - 시리얼 모니터로 출력 확인
+   - 예상치 못한 재부팅 없는지 확인
+   - 메모리 누수 없는지 장시간 테스트
+
+## 📚 참고할 Arduino 관용구
+
+```cpp
+// ✅ LED 제어
+pinMode(LED_PIN, OUTPUT);
+digitalWrite(LED_PIN, HIGH);
+
+// ✅ 타이머
+unsigned long previousMillis = 0;
+const long interval = 1000;
+
+void loop() {
+    unsigned long currentMillis = millis();
+    if (currentMillis - previousMillis >= interval) {
+        previousMillis = currentMillis;
+        // 1초마다 실행
+    }
+}
+
+// ✅ 시리얼 통신
+Serial.begin(115200);
+Serial.println("메시지");
+if (Serial.available()) {
+    char c = Serial.read();
+}
+```
+
+## 💡 요약
+
+1. **Arduino 문법 준수** - 표준 라이브러리만 사용
+2. **메모리 주의** - ESP32의 제한된 리소스 고려
+3. **컴파일 검증** - 모든 수정 후 반드시 컴파일
+4. **실제 테스트** - 하드웨어에서 동작 확인
+5. **C++ STL 금지** - Arduino 표준 API만 사용

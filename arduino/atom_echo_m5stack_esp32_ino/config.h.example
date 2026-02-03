@@ -41,6 +41,8 @@ const uint16_t SERVER_PORT = 5001;       // Server Port
 #define AUDIO_SAMPLE_RATE 16000          // Sample rate (Hz)
 #define AUDIO_FRAME_SIZE 320             // Samples per frame (20ms at 16kHz)
 #define PREROLL_MS 200                   // Pre-roll buffer duration (ms)
+#define AUDIO_RING_BUFFER_SIZE 32768     // TTS playback buffer size (32KB)
+#define ENABLE_BUTTON_INTERRUPT 1        // 1: 버튼으로 TTS 중단 가능, 0: 비활성화
 
 // ============================================
 // Connection Settings

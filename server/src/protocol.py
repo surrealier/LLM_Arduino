@@ -14,6 +14,7 @@ PTYPE_PING = 0x10
 PTYPE_PONG = 0x1F
 PTYPE_CMD = 0x11
 PTYPE_AUDIO_OUT = 0x12
+PTYPE_BUFFER_STATUS = 0x13  # 버퍼 상태 보고 (선택적)
 
 
 def recv_exact(conn: socket.socket, n: int, max_timeouts: int = 20) -> Optional[bytes]:
@@ -44,8 +45,8 @@ def send_packet(
     ptype: int,
     payload: Optional[bytes] = b"",
     lock=None,
-    audio_chunk: int = 4096,
-    audio_sleep_s: float = 0.002,
+    audio_chunk: int = 2048,
+    audio_sleep_s: float = 0.010,
 ) -> bool:
     """안정적인 패킷 전송. 오디오는 샘플 경계 유지."""
     try:

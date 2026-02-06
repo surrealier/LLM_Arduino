@@ -18,6 +18,7 @@ from src.agent_mode import AgentMode
 from src.audio_processor import normalize_to_dbfs, qc, save_wav, trim_energy
 from src.connection_manager import ConnectionManager
 from src.job_queue import JobQueue
+from src.llm_client import LLMClient
 from src.logging_setup import get_performance_logger, setup_logging
 from src.protocol import (
     PTYPE_AUDIO,
@@ -329,10 +330,18 @@ def main():
     assistant_config = config.get_assistant_config()
     tts_config = config.get_tts_config()
 
+    # 단일 LLM 클라이언트 생성
+    llm_config = config.get_llm_config()
+    llm_client = LLMClient(
+        base_url=llm_config.get("base_url", "http://localhost:11434"),
+        model=llm_config.get("model", "qwen2.5:0.5b"),
+    )
+    log.info("LLM Client: %s (%s)", llm_client.base_url, llm_client.model)
+
     # 모드별 핸들러 초기화
-    robot_handler = RobotMode(ACTIONS_CONFIG, device)
+    robot_handler = RobotMode(ACTIONS_CONFIG, llm_client)
     agent_handler = AgentMode(
-        device,
+        llm_client,
         weather_config.get("api_key"),
         weather_config.get("location", "Seoul"),
         assistant_config.get("proactive", True),
@@ -345,9 +354,6 @@ def main():
         assistant_config.get("name", "아이"),
         assistant_config.get("personality", "cheerful"),
     )
-
-    robot_handler.load_model()
-    agent_handler.load_model()
 
     stt_engine = STTEngine(model_size=model_size, device=device, language=language)
 

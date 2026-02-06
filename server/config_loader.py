@@ -31,8 +31,8 @@ class Config:
             "language": "ko"
         },
         "llm": {
-            "model_name": "Qwen/Qwen2.5-0.5B-Instruct",
-            "device": "cuda"
+            "base_url": "http://localhost:11434",
+            "model": "qwen2.5:0.5b"
         },
         "tts": {
             "voice": "ko-KR-SunHiNeural"
@@ -122,7 +122,6 @@ class Config:
             if "DEVICE" in os.environ:
                 device = os.environ["DEVICE"]
                 self.config["stt"]["device"] = device
-                self.config["llm"]["device"] = device
             
             if "ASSISTANT_NAME" in os.environ:
                 self.config["assistant"]["name"] = os.environ["ASSISTANT_NAME"]

@@ -25,16 +25,14 @@ class AgentMode:
     """에이전트 모드 메인 클래스 - 가정용 AI 어시스턴트 기능 제공"""
     def __init__(
         self,
-        device="cuda",
+        llm_client,
         weather_api_key=None,
         location="Seoul",
         proactive_enabled=True,
         proactive_interval=1800,
         tts_voice=None,
     ):
-        self.device = device
-        self.model = None
-        self.tokenizer = None
+        self.llm = llm_client
         self.tts_voice = tts_voice or "ko-KR-SunHiNeural"
 
         # 대화 기록 및 메모리 관리
@@ -55,29 +53,6 @@ class AgentMode:
         self.backup_dir.mkdir(exist_ok=True)
 
         self._restore_context()
-
-    def load_model(self):
-        """LLM 모델 로드 - 대화형 AI용 Qwen2.5 모델 초기화"""
-        try:
-            from transformers import AutoModelForCausalLM, AutoTokenizer
-            import torch
-
-            log.info("Loading Qwen2.5-0.5B-Instruct for Agent Mode on %s...", self.device)
-            model_name = "Qwen/Qwen2.5-0.5B-Instruct"
-
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-            torch_dtype = torch.float16 if self.device == "cuda" else torch.float32
-            self.model = AutoModelForCausalLM.from_pretrained(
-                model_name,
-                torch_dtype=torch_dtype,
-                device_map=self.device,
-                trust_remote_code=True,
-            )
-            log.info("Agent Mode LLM loaded.")
-        except ImportError:
-            log.error("Transformers/Torch not installed. pip install transformers torch accelerate")
-        except Exception as exc:
-            log.error("Failed to load Agent LLM: %s", exc)
 
     def _get_personality_traits(self, personality: str) -> str:
         """성격 특성 정의 - 설정된 성격에 따른 응답 스타일 결정"""
@@ -138,7 +113,7 @@ class AgentMode:
 
     def generate_response(self, text: str, is_proactive: bool = False) -> str:
         """응답 생성 - 사용자 입력에 대한 AI 어시스턴트 응답 생성"""
-        if not self.model or not self.tokenizer:
+        if not self.llm:
             return "모델이 로드되지 않았습니다."
 
         try:
@@ -184,24 +159,7 @@ class AgentMode:
                 messages.append({"role": conv["role"], "content": conv["content"]})
 
             # LLM 추론 실행
-            text_input = self.tokenizer.apply_chat_template(
-                messages, tokenize=False, add_generation_prompt=True
-            )
-            model_inputs = self.tokenizer([text_input], return_tensors="pt").to(self.device)
-
-            generated_ids = self.model.generate(
-                model_inputs.input_ids,
-                max_new_tokens=256,
-                do_sample=True,
-                temperature=0.8,
-                top_p=0.9,
-                repetition_penalty=1.1,
-            )
-
-            generated_ids = [
-                output_ids[len(input_ids) :] for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
-            ]
-            response = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
+            response = self.llm.chat(messages, temperature=0.8, max_tokens=256)
 
             # 응답 감정 분석 및 대화 기록 추가
             response_emotion = self.emotion_system.analyze_emotion(response)

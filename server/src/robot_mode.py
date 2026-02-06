@@ -22,34 +22,9 @@ UNSURE_POLICY = "NOOP"
 
 class RobotMode:
     """로봇 모드 메인 클래스 - 음성 명령을 로봇 동작으로 변환"""
-    def __init__(self, actions_config, device="cuda"):
+    def __init__(self, actions_config, llm_client=None):
         self.actions_config = actions_config
-        self.device = device
-        self.model = None
-        self.tokenizer = None
-
-    def load_model(self):
-        """LLM 모델 로드 - 음성 명령 해석용 Qwen2.5 모델 초기화"""
-        try:
-            from transformers import AutoModelForCausalLM, AutoTokenizer
-            import torch
-
-            log.info("Loading Qwen2.5-0.5B-Instruct for Robot Mode on %s...", self.device)
-            model_name = "Qwen/Qwen2.5-0.5B-Instruct"
-
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-            torch_dtype = torch.float16 if self.device == "cuda" else torch.float32
-            self.model = AutoModelForCausalLM.from_pretrained(
-                model_name,
-                torch_dtype=torch_dtype,
-                device_map=self.device,
-                trust_remote_code=True,
-            )
-            log.info("Robot Mode LLM loaded.")
-        except ImportError:
-            log.error("Transformers/Torch not installed. pip install transformers torch accelerate")
-        except Exception as exc:
-            log.error("Failed to load Robot LLM: %s", exc)
+        self.llm = llm_client
 
     def process_text(self, text: str, current_angle: int):
         """키워드 기반 텍스트 명령 처리 - 설정된 액션 규칙에 따라 명령 파싱"""
@@ -139,7 +114,7 @@ class RobotMode:
 
     def process_with_llm(self, text: str, current_angle: int):
         """LLM 기반 명령 처리 - 음성 텍스트 정제 및 지능형 명령 해석"""
-        if not self.model or not self.tokenizer:
+        if not self.llm:
             action, _, _ = self.process_text(text, current_angle)
             return text, action
 
@@ -174,23 +149,7 @@ class RobotMode:
             {"role": "user", "content": f"다음 음성인식 결과를 정제하세요: {text}"},
         ]
 
-        # LLM 추론을 통한 텍스트 정제
-        text_input = self.tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
-        model_inputs = self.tokenizer([text_input], return_tensors="pt").to(self.device)
-
-        generated_ids = self.model.generate(
-            model_inputs.input_ids,
-            max_new_tokens=64,
-            do_sample=False,
-            temperature=0.1,
-        )
-
-        generated_ids = [
-            output_ids[len(input_ids) :] for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
-        ]
-        refined = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
+        refined = self.llm.chat(messages, temperature=0.1, max_tokens=64)
 
         # 정제 결과 검증 - 비정상적인 결과 필터링
         if len(refined) > len(text) * 3 or len(refined) < 1:
@@ -240,22 +199,7 @@ class RobotMode:
         ]
 
         # LLM을 통한 명령 해석
-        text_input = self.tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
-        model_inputs = self.tokenizer([text_input], return_tensors="pt").to(self.device)
-
-        generated_ids = self.model.generate(
-            model_inputs.input_ids,
-            max_new_tokens=128,
-            do_sample=False,
-            temperature=0.1,
-        )
-
-        generated_ids = [
-            output_ids[len(input_ids) :] for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
-        ]
-        response = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
+        response = self.llm.chat(messages, temperature=0.1, max_tokens=128)
 
         # JSON 응답 파싱 및 각도 범위 검증
         match = re.search(r"\{[^}]+\}", response)

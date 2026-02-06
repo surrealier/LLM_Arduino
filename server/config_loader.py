@@ -45,7 +45,8 @@ class Config:
         },
         "weather": {
             "api_key": "",
-            "location": "Seoul"
+            "lat": 37.5665,
+            "lon": 126.9780
         },
         "context": {
             "max_history": 20,

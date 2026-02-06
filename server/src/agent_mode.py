@@ -27,7 +27,8 @@ class AgentMode:
         self,
         llm_client,
         weather_api_key=None,
-        location="Seoul",
+        lat=37.5665,
+        lon=126.9780,
         proactive_enabled=True,
         proactive_interval=1800,
         tts_voice=None,
@@ -44,7 +45,7 @@ class AgentMode:
 
         # 서브시스템 초기화
         self.emotion_system = EmotionSystem()
-        self.info_services = InfoServices(weather_api_key, location)
+        self.info_services = InfoServices(weather_api_key, lat=lat, lon=lon)
         self.proactive = ProactiveInteraction(proactive_enabled, proactive_interval)
         self.scheduler = Scheduler()
 
@@ -127,18 +128,19 @@ class AgentMode:
                 if sleep_response:
                     return sleep_response
 
-            # 정보 서비스 요청 처리 (날씨, 뉴스 등)
+            # 정보 서비스 요청 처리 (날씨, 뉴스 등) → LLM 컨텍스트로 주입
+            info_context = None
             if not is_proactive:
-                info_response = self.info_services.process_info_request(text)
-                if info_response:
-                    log.info("Info request processed: %s...", text[:30])
-                    return info_response
+                info_data = self.info_services.process_info_request(text)
+                if info_data:
+                    import json
+                    info_context = json.dumps(info_data, ensure_ascii=False)
+                    log.info("Info data for LLM context: %s", info_context)
 
                 # 스케줄 관련 요청 처리
                 schedule_response = self.scheduler.process_schedule_request(text)
                 if schedule_response:
-                    log.info("Schedule request processed: %s...", text[:30])
-                    return schedule_response
+                    info_context = schedule_response if isinstance(schedule_response, str) else str(schedule_response)
 
             # 감정 분석
             detected_emotion = self.emotion_system.analyze_emotion(text)
@@ -154,7 +156,10 @@ class AgentMode:
             )
 
             # LLM 응답 생성을 위한 메시지 구성
-            messages = [{"role": "system", "content": self._get_system_prompt()}]
+            system_prompt = self._get_system_prompt()
+            if info_context:
+                system_prompt += f"\n\n[참고 데이터]\n{info_context}\n위 데이터를 바탕으로 자연스럽게 답변하세요."
+            messages = [{"role": "system", "content": system_prompt}]
             for conv in self.conversation_history[-self.max_history :]:
                 messages.append({"role": conv["role"], "content": conv["content"]})
 

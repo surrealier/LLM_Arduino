@@ -343,10 +343,11 @@ def main():
     agent_handler = AgentMode(
         llm_client,
         weather_config.get("api_key"),
-        weather_config.get("location", "Seoul"),
-        assistant_config.get("proactive", True),
-        assistant_config.get("proactive_interval", 1800),
-        tts_config.get("voice", "ko-KR-SunHiNeural"),
+        lat=weather_config.get("lat", 37.5665),
+        lon=weather_config.get("lon", 126.9780),
+        proactive_enabled=assistant_config.get("proactive", True),
+        proactive_interval=assistant_config.get("proactive_interval", 1800),
+        tts_voice=tts_config.get("voice", "ko-KR-SunHiNeural"),
     )
 
     log.info(

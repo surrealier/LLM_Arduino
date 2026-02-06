@@ -31,7 +31,8 @@ assistant:
 # Weather Service (OpenWeatherMap)
 weather:
   api_key: ""               # Get free key from openweathermap.org
-  location: "Seoul"         # City name
+  lat: 37.5665              # 위도 (서울 기본값)
+  lon: 126.9780             # 경도 (서울 기본값)
 
 # Context Management
 context:

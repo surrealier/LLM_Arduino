@@ -1,3 +1,9 @@
+"""
+ESP32 음성 스트리밍 서버 메인 모듈
+- ESP32로부터 음성 데이터를 수신하여 STT 처리
+- 로봇 모드와 에이전트 모드 지원
+- TCP 소켓 통신으로 명령/음성 응답 전송
+"""
 import os
 import signal
 import threading
@@ -12,6 +18,7 @@ from src.agent_mode import AgentMode
 from src.audio_processor import normalize_to_dbfs, qc, save_wav, trim_energy
 from src.connection_manager import ConnectionManager
 from src.job_queue import JobQueue
+from src.llm_client import LLMClient
 from src.logging_setup import get_performance_logger, setup_logging
 from src.protocol import (
     PTYPE_AUDIO,
@@ -31,13 +38,14 @@ os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
-
+# 오디오 처리 상수
 SR = 16000
 UNSURE_POLICY = "NOOP"
 
 ACTIONS_CONFIG = []
 current_mode = "agent"  # 디폴트 모드: agent
 
+# 모드별 핸들러 인스턴스
 robot_handler = None
 agent_handler = None
 
@@ -102,6 +110,7 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
                         send_action(conn, action, send_lock)
                     continue
 
+                # 음성 데이터를 PCM으로 변환 및 품질 검사
                 pcm = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
                 rms_db, peak, clip = qc(pcm)
                 log.debug("QC sid=%s rms=%.1fdBFS peak=%.3f clip=%.2f%%", sid, rms_db, peak, clip)
@@ -126,6 +135,7 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
                 # save_wav(wav_path, pcm, SR)
                 # log.info("Saved wav: %s", wav_path)
 
+                # STT 처리 및 텍스트 정리
                 text = ""
                 try:
                     stt_start = time.time()
@@ -242,10 +252,12 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
                     log.info("Disconnect (payload)")
                     break
 
+            # 프로토콜 타입별 처리
             if ptype == PTYPE_PING:
                 send_pong(conn, send_lock)
                 continue
 
+            # 음성 스트림 시작 처리
             if ptype == PTYPE_START:
                 with state_lock:
                     state["sid"] += 1
@@ -253,12 +265,14 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
                 audio_buf = bytearray()
                 log.info("START (sid=%s)", sid)
 
+            # 음성 데이터 수집
             elif ptype == PTYPE_AUDIO:
                 audio_buf.extend(payload)
                 if len(audio_buf) > int(config.get("audio", "max_seconds", default=12) * SR * 2):
                     log.warning("Buffer too large -> force END")
                     ptype = PTYPE_END
 
+            # 음성 스트림 종료 및 STT 큐에 추가
             if ptype == PTYPE_END:
                 with state_lock:
                     sid = state["sid"]
@@ -316,14 +330,24 @@ def main():
     assistant_config = config.get_assistant_config()
     tts_config = config.get_tts_config()
 
-    robot_handler = RobotMode(ACTIONS_CONFIG, device)
+    # 단일 LLM 클라이언트 생성
+    llm_config = config.get_llm_config()
+    llm_client = LLMClient(
+        base_url=llm_config.get("base_url", "http://localhost:11434"),
+        model=llm_config.get("model", "qwen2.5:0.5b"),
+    )
+    log.info("LLM Client: %s (%s)", llm_client.base_url, llm_client.model)
+
+    # 모드별 핸들러 초기화
+    robot_handler = RobotMode(ACTIONS_CONFIG, llm_client)
     agent_handler = AgentMode(
-        device,
+        llm_client,
         weather_config.get("api_key"),
-        weather_config.get("location", "Seoul"),
-        assistant_config.get("proactive", True),
-        assistant_config.get("proactive_interval", 1800),
-        tts_config.get("voice", "ko-KR-SunHiNeural"),
+        lat=weather_config.get("lat", 37.5665),
+        lon=weather_config.get("lon", 126.9780),
+        proactive_enabled=assistant_config.get("proactive", True),
+        proactive_interval=assistant_config.get("proactive_interval", 1800),
+        tts_voice=tts_config.get("voice", "ko-KR-SunHiNeural"),
     )
 
     log.info(
@@ -331,9 +355,6 @@ def main():
         assistant_config.get("name", "아이"),
         assistant_config.get("personality", "cheerful"),
     )
-
-    robot_handler.load_model()
-    agent_handler.load_model()
 
     stt_engine = STTEngine(model_size=model_size, device=device, language=language)
 

@@ -11,10 +11,10 @@ stt:
   device: "cuda"       # cuda or cpu
   language: "ko"
 
-# LLM Settings
+# LLM Settings (Ollama)
 llm:
-  model_name: "Qwen/Qwen2.5-0.5B-Instruct"
-  device: "cuda"       # cuda or cpu
+  base_url: "http://localhost:11434"
+  model: "qwen2.5:0.5b"
 
 # TTS (Text-to-Speech) Settings
 tts:
@@ -31,7 +31,8 @@ assistant:
 # Weather Service (OpenWeatherMap)
 weather:
   api_key: ""               # Get free key from openweathermap.org
-  location: "Seoul"         # City name
+  lat: 37.5665              # 위도 (서울 기본값)
+  lon: 126.9780             # 경도 (서울 기본값)
 
 # Context Management
 context:

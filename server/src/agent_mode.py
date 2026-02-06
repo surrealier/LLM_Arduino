@@ -1,3 +1,10 @@
+"""
+에이전트 모드 처리 모듈
+- 가정용 AI 어시스턴트 기능 제공
+- 대화 기록 관리 및 컨텍스트 유지
+- 감정 분석, 정보 서비스, 스케줄링 통합
+- TTS 음성 합성 및 오디오 처리
+"""
 import asyncio
 import logging
 import time
@@ -15,59 +22,41 @@ log = logging.getLogger(__name__)
 
 
 class AgentMode:
+    """에이전트 모드 메인 클래스 - 가정용 AI 어시스턴트 기능 제공"""
     def __init__(
         self,
-        device="cuda",
+        llm_client,
         weather_api_key=None,
-        location="Seoul",
+        lat=37.5665,
+        lon=126.9780,
         proactive_enabled=True,
         proactive_interval=1800,
         tts_voice=None,
     ):
-        self.device = device
-        self.model = None
-        self.tokenizer = None
+        self.llm = llm_client
         self.tts_voice = tts_voice or "ko-KR-SunHiNeural"
 
+        # 대화 기록 및 메모리 관리
         self.conversation_history = []
         self.important_memories = []
         self.max_history = 20
         self.context_backup_interval = 10
         self.conversation_count = 0
 
+        # 서브시스템 초기화
         self.emotion_system = EmotionSystem()
-        self.info_services = InfoServices(weather_api_key, location)
+        self.info_services = InfoServices(weather_api_key, lat=lat, lon=lon)
         self.proactive = ProactiveInteraction(proactive_enabled, proactive_interval)
         self.scheduler = Scheduler()
 
+        # 컨텍스트 백업 디렉토리 설정
         self.backup_dir = Path("context_backup")
         self.backup_dir.mkdir(exist_ok=True)
 
         self._restore_context()
 
-    def load_model(self):
-        try:
-            from transformers import AutoModelForCausalLM, AutoTokenizer
-            import torch
-
-            log.info("Loading Qwen2.5-0.5B-Instruct for Agent Mode on %s...", self.device)
-            model_name = "Qwen/Qwen2.5-0.5B-Instruct"
-
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-            torch_dtype = torch.float16 if self.device == "cuda" else torch.float32
-            self.model = AutoModelForCausalLM.from_pretrained(
-                model_name,
-                torch_dtype=torch_dtype,
-                device_map=self.device,
-                trust_remote_code=True,
-            )
-            log.info("Agent Mode LLM loaded.")
-        except ImportError:
-            log.error("Transformers/Torch not installed. pip install transformers torch accelerate")
-        except Exception as exc:
-            log.error("Failed to load Agent LLM: %s", exc)
-
     def _get_personality_traits(self, personality: str) -> str:
+        """성격 특성 정의 - 설정된 성격에 따른 응답 스타일 결정"""
         traits = {
             "cheerful": "밝고 활발하며 긍정적입니다. 대화에서 즐거움과 에너지를 전달합니다.",
             "calm": "차분하고 안정적이며 신중합니다. 편안하고 믿을 수 있는 분위기를 만듭니다.",
@@ -77,6 +66,7 @@ class AgentMode:
         return traits.get(personality, traits["cheerful"])
 
     def _get_system_prompt(self) -> str:
+        """시스템 프롬프트 생성 - AI 어시스턴트 역할 및 성격 정의"""
         from config_loader import get_config
 
         config = get_config()
@@ -86,6 +76,7 @@ class AgentMode:
         personality = assistant_config.get("personality", "cheerful")
         personality_trait = self._get_personality_traits(personality)
 
+        # 중요한 기억 정보 추가
         memories_text = ""
         if self.important_memories:
             memories_text = "\n\n중요한 기억:\n" + "\n".join(
@@ -122,31 +113,39 @@ class AgentMode:
         )
 
     def generate_response(self, text: str, is_proactive: bool = False) -> str:
-        if not self.model or not self.tokenizer:
+        """응답 생성 - 사용자 입력에 대한 AI 어시스턴트 응답 생성"""
+        if not self.llm:
             return "모델이 로드되지 않았습니다."
 
         try:
+            # 능동적 상호작용 업데이트 (일반 대화인 경우)
             if not is_proactive:
                 self.proactive.update_interaction()
 
+            # 수면 명령 확인 및 처리
             if not is_proactive:
                 sleep_response = self._check_sleep_commands(text)
                 if sleep_response:
                     return sleep_response
 
+            # 정보 서비스 요청 처리 (날씨, 뉴스 등) → LLM 컨텍스트로 주입
+            info_context = None
             if not is_proactive:
-                info_response = self.info_services.process_info_request(text)
-                if info_response:
-                    log.info("Info request processed: %s...", text[:30])
-                    return info_response
+                info_data = self.info_services.process_info_request(text)
+                if info_data:
+                    import json
+                    info_context = json.dumps(info_data, ensure_ascii=False)
+                    log.info("Info data for LLM context: %s", info_context)
 
+                # 스케줄 관련 요청 처리
                 schedule_response = self.scheduler.process_schedule_request(text)
                 if schedule_response:
-                    log.info("Schedule request processed: %s...", text[:30])
-                    return schedule_response
+                    info_context = schedule_response if isinstance(schedule_response, str) else str(schedule_response)
 
+            # 감정 분석
             detected_emotion = self.emotion_system.analyze_emotion(text)
 
+            # 대화 기록에 사용자 입력 추가
             self.conversation_history.append(
                 {
                     "role": "user",
@@ -156,29 +155,18 @@ class AgentMode:
                 }
             )
 
-            messages = [{"role": "system", "content": self._get_system_prompt()}]
+            # LLM 응답 생성을 위한 메시지 구성
+            system_prompt = self._get_system_prompt()
+            if info_context:
+                system_prompt += f"\n\n[참고 데이터]\n{info_context}\n위 데이터를 바탕으로 자연스럽게 답변하세요."
+            messages = [{"role": "system", "content": system_prompt}]
             for conv in self.conversation_history[-self.max_history :]:
                 messages.append({"role": conv["role"], "content": conv["content"]})
 
-            text_input = self.tokenizer.apply_chat_template(
-                messages, tokenize=False, add_generation_prompt=True
-            )
-            model_inputs = self.tokenizer([text_input], return_tensors="pt").to(self.device)
+            # LLM 추론 실행
+            response = self.llm.chat(messages, temperature=0.8, max_tokens=256)
 
-            generated_ids = self.model.generate(
-                model_inputs.input_ids,
-                max_new_tokens=256,
-                do_sample=True,
-                temperature=0.8,
-                top_p=0.9,
-                repetition_penalty=1.1,
-            )
-
-            generated_ids = [
-                output_ids[len(input_ids) :] for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
-            ]
-            response = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
-
+            # 응답 감정 분석 및 대화 기록 추가
             response_emotion = self.emotion_system.analyze_emotion(response)
             self.conversation_history.append(
                 {
@@ -189,10 +177,12 @@ class AgentMode:
                 }
             )
 
+            # 대화 카운트 증가 및 주기적 백업
             self.conversation_count += 1
             if self.conversation_count % self.context_backup_interval == 0:
                 self._backup_context()
 
+            # 중요 정보 추출 및 저장
             self._extract_important_info(text, response)
             log.info("Agent Response: %s", response)
             return response
@@ -201,6 +191,7 @@ class AgentMode:
             return "죄송해요, 오류가 발생했어요."
 
     def _extract_important_info(self, user_text: str, assistant_response: str):
+        """중요 정보 추출 - 대화에서 기억해야 할 정보 식별 및 저장"""
         important_keywords = [
             "이름",
             "생일",
@@ -226,10 +217,12 @@ class AgentMode:
                     log.info("Important memory saved: %s", memory_entry)
                 break
 
+        # 메모리 크기 제한
         if len(self.important_memories) > 50:
             self.important_memories = self.important_memories[-50:]
 
     def _backup_context(self):
+        """컨텍스트 백업 - 대화 기록 및 중요 정보를 파일로 저장"""
         try:
             backup_data = {
                 "timestamp": datetime.now().isoformat(),
@@ -247,6 +240,7 @@ class AgentMode:
             log.error("Context backup failed: %s", exc)
 
     def _restore_context(self):
+        """컨텍스트 복원 - 이전 대화 기록 및 중요 정보 로드"""
         try:
             files = sorted(self.backup_dir.glob("context_*.json"))
             if not files:
@@ -264,6 +258,7 @@ class AgentMode:
             log.error("Context restore failed: %s", exc)
 
     def _check_sleep_commands(self, text: str):
+        """수면 명령 확인 - 사용자의 수면/휴식 요청 처리"""
         sleep_keywords = ["자러", "잘게", "잘게요", "잘게요", "그만", "쉬자"]
         if any(keyword in text for keyword in sleep_keywords):
             self.proactive.sleep_mode = True
@@ -272,12 +267,14 @@ class AgentMode:
         return None
 
     async def _tts_gen(self, text, output_file):
+        """TTS 생성 - Edge TTS를 사용한 음성 합성"""
         import edge_tts
 
         communicate = edge_tts.Communicate(text, self.tts_voice)
         await communicate.save(output_file)
 
     def text_to_audio(self, text: str):
+        """텍스트를 오디오로 변환 - TTS 생성 및 오디오 후처리"""
         try:
             import librosa
             import os
@@ -287,6 +284,7 @@ class AgentMode:
 
             log.info("Generating TTS for: %s", text[:50])
 
+            # 이벤트 루프 설정 및 TTS 생성
             try:
                 loop = asyncio.get_event_loop()
                 if loop.is_closed():
@@ -308,11 +306,11 @@ class AgentMode:
                 log.error("TTS audio empty after decoding: %s", tmp_mp3)
                 return b""
 
-            # DC 오프셋 제거 + 무음 구간 트림
+            # 오디오 후처리 - DC 오프셋 제거 및 무음 구간 트림
             pcm_f32 = (pcm_f32 - np.mean(pcm_f32)).astype(np.float32, copy=False)
             pcm_f32 = trim_energy(pcm_f32, sr=sr, top_db=35.0, pad_ms=140)
 
-            # 가능한 크게 재생되도록 RMS 정규화 (클리핑 방지)
+            # 음량 정규화 - RMS 기반 볼륨 조정
             pcm_f32 = normalize_to_dbfs(pcm_f32, target_dbfs=-12.0, max_gain_db=24.0)
             peak = float(np.max(np.abs(pcm_f32))) if pcm_f32.size else 0.0
             if peak > 0.98:
@@ -322,6 +320,7 @@ class AgentMode:
             pcm_16 = (pcm_f32 * 32767.0).astype("<i2")
             audio_bytes = pcm_16.tobytes()
 
+            # 오디오 품질 검증 및 로깅
             rms_db, peak, clip = qc(pcm_f32)
             log.info(
                 "TTS generated: %d bytes, %.2f seconds, RMS: %.2f dBFS, peak: %.3f, clip: %.2f%%",

@@ -1,3 +1,9 @@
+"""
+로봇 모드 처리 모듈
+- 음성 명령을 서보 모터 제어 명령으로 변환
+- 키워드 기반 명령 파싱 및 LLM 기반 명령 해석
+- 서보 각도 제어 및 동작 명령 생성
+"""
 import json
 import logging
 import re
@@ -6,6 +12,7 @@ from .utils import clamp
 
 log = logging.getLogger(__name__)
 
+# 서보 모터 제어 상수 정의
 SERVO_MIN = 0
 SERVO_MAX = 180
 DEFAULT_ANGLE_CENTER = 90
@@ -14,35 +21,13 @@ UNSURE_POLICY = "NOOP"
 
 
 class RobotMode:
-    def __init__(self, actions_config, device="cuda"):
+    """로봇 모드 메인 클래스 - 음성 명령을 로봇 동작으로 변환"""
+    def __init__(self, actions_config, llm_client=None):
         self.actions_config = actions_config
-        self.device = device
-        self.model = None
-        self.tokenizer = None
-
-    def load_model(self):
-        try:
-            from transformers import AutoModelForCausalLM, AutoTokenizer
-            import torch
-
-            log.info("Loading Qwen2.5-0.5B-Instruct for Robot Mode on %s...", self.device)
-            model_name = "Qwen/Qwen2.5-0.5B-Instruct"
-
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-            torch_dtype = torch.float16 if self.device == "cuda" else torch.float32
-            self.model = AutoModelForCausalLM.from_pretrained(
-                model_name,
-                torch_dtype=torch_dtype,
-                device_map=self.device,
-                trust_remote_code=True,
-            )
-            log.info("Robot Mode LLM loaded.")
-        except ImportError:
-            log.error("Transformers/Torch not installed. pip install transformers torch accelerate")
-        except Exception as exc:
-            log.error("Failed to load Robot LLM: %s", exc)
+        self.llm = llm_client
 
     def process_text(self, text: str, current_angle: int):
+        """키워드 기반 텍스트 명령 처리 - 설정된 액션 규칙에 따라 명령 파싱"""
         t = (text or "").strip()
         if not t:
             return (
@@ -51,16 +36,19 @@ class RobotMode:
                 current_angle,
             )
 
+        # 설정된 명령어 패턴 순회하며 매칭 검사
         for cmd in self.actions_config:
             matched = False
             captured_val = None
 
+            # 키워드 매칭 검사
             if "keywords" in cmd:
                 for key in cmd["keywords"]:
                     if key in t:
                         matched = True
                         break
 
+            # 정규식 패턴 매칭 검사
             if not matched and "pattern" in cmd:
                 match = re.search(cmd["pattern"], t)
                 if match:
@@ -71,13 +59,16 @@ class RobotMode:
                         except Exception:
                             pass
 
+            # 매칭된 명령어 처리
             if matched:
                 action_type = cmd.get("action", "NOOP")
                 servo_idx = cmd.get("servo", 0)
 
+                # 모드 전환 명령 처리
                 if action_type == "SWITCH_MODE":
                     return ({"action": "SWITCH_MODE", "mode": cmd.get("mode", "robot")}, True, current_angle)
 
+                # 서보 절대 각도 설정 명령 처리
                 if action_type == "SERVO_SET":
                     angle = cmd.get("angle")
                     if cmd.get("use_captured") and captured_val is not None:
@@ -92,6 +83,7 @@ class RobotMode:
                         final_angle,
                     )
 
+                # 서보 각도 증가 명령 처리
                 if action_type == "SERVO_INC":
                     step = cmd.get("value", DEFAULT_STEP)
                     final_angle = clamp(current_angle + step, SERVO_MIN, SERVO_MAX)
@@ -101,6 +93,7 @@ class RobotMode:
                         final_angle,
                     )
 
+                # 서보 각도 감소 명령 처리
                 if action_type == "SERVO_DEC":
                     step = cmd.get("value", DEFAULT_STEP)
                     final_angle = clamp(current_angle - step, SERVO_MIN, SERVO_MAX)
@@ -112,6 +105,7 @@ class RobotMode:
 
                 return ({"action": action_type, "servo": servo_idx}, True, current_angle)
 
+        # 매칭되지 않은 경우 기본 동작 반환
         return (
             {"action": "NOOP"} if UNSURE_POLICY == "NOOP" else {"action": "WIGGLE"},
             False,
@@ -119,7 +113,8 @@ class RobotMode:
         )
 
     def process_with_llm(self, text: str, current_angle: int):
-        if not self.model or not self.tokenizer:
+        """LLM 기반 명령 처리 - 음성 텍스트 정제 및 지능형 명령 해석"""
+        if not self.llm:
             action, _, _ = self.process_text(text, current_angle)
             return text, action
 
@@ -133,6 +128,7 @@ class RobotMode:
             return text, action
 
     def _refine_stt(self, text: str) -> str:
+        """음성인식 결과 정제 - STT 오류 수정 및 텍스트 품질 향상"""
         if not text or len(text) < 2:
             return text
 
@@ -153,28 +149,16 @@ class RobotMode:
             {"role": "user", "content": f"다음 음성인식 결과를 정제하세요: {text}"},
         ]
 
-        text_input = self.tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
-        model_inputs = self.tokenizer([text_input], return_tensors="pt").to(self.device)
+        refined = self.llm.chat(messages, temperature=0.1, max_tokens=64)
 
-        generated_ids = self.model.generate(
-            model_inputs.input_ids,
-            max_new_tokens=64,
-            do_sample=False,
-            temperature=0.1,
-        )
-
-        generated_ids = [
-            output_ids[len(input_ids) :] for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
-        ]
-        refined = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
-
+        # 정제 결과 검증 - 비정상적인 결과 필터링
         if len(refined) > len(text) * 3 or len(refined) < 1:
             return text
         return refined
 
     def _determine_action(self, text: str, current_angle: int) -> dict:
+        """LLM 기반 동작 결정 - 정제된 텍스트를 로봇 명령으로 변환"""
+        # 사용 가능한 명령어 목록 생성
         commands_desc = []
         for cmd in self.actions_config:
             if cmd.get("action") == "SWITCH_MODE":
@@ -214,23 +198,10 @@ class RobotMode:
             {"role": "user", "content": f"명령: {text}"},
         ]
 
-        text_input = self.tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
-        model_inputs = self.tokenizer([text_input], return_tensors="pt").to(self.device)
+        # LLM을 통한 명령 해석
+        response = self.llm.chat(messages, temperature=0.1, max_tokens=128)
 
-        generated_ids = self.model.generate(
-            model_inputs.input_ids,
-            max_new_tokens=128,
-            do_sample=False,
-            temperature=0.1,
-        )
-
-        generated_ids = [
-            output_ids[len(input_ids) :] for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
-        ]
-        response = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
-
+        # JSON 응답 파싱 및 각도 범위 검증
         match = re.search(r"\{[^}]+\}", response)
         if match:
             action_dict = json.loads(match.group(0))

@@ -1,54 +1,57 @@
 // Configuration for M5Stack Atom Echo Home Agent
 // Copy this file to config.h and fill in your credentials
+//
+// WiFi/Server 변수는 .ino에서 정의합니다.
+// 이 파일의 extern 선언과 #define 매크로만 config.h에 복사하세요.
 
 #ifndef CONFIG_H
 #define CONFIG_H
 
 // ============================================
-// WiFi Settings (REQUIRED - Fill in your info)
+// WiFi Settings (REQUIRED - define in .ino)
 // ============================================
-const char* SSID = "YOUR_WIFI_SSID";     // Your WiFi SSID
-const char* PASS = "YOUR_WIFI_PASSWORD"; // Your WiFi Password
+extern const char* SSID;      // .ino: const char* SSID = "YOUR_WIFI_SSID";
+extern const char* PASS;      // .ino: const char* PASS = "YOUR_WIFI_PASSWORD";
 
 // ============================================
-// Server Settings (REQUIRED - Fill in your info)
+// Server Settings (REQUIRED - define in .ino)
 // ============================================
-const char* SERVER_IP = "192.168.1.100"; // Server IP Address
-const uint16_t SERVER_PORT = 5001;       // Server Port
+extern const char* SERVER_IP;       // .ino: const char* SERVER_IP = "192.168.1.100";
+extern const uint16_t SERVER_PORT;  // .ino: const uint16_t SERVER_PORT = 5001;
 
 // ============================================
 // Servo Settings
 // ============================================
-#define SERVO_PIN 25                     // GPIO pin for servo
-#define SERVO_MIN_ANGLE 0                // Minimum servo angle
-#define SERVO_MAX_ANGLE 180              // Maximum servo angle
-#define SERVO_CENTER_ANGLE 90            // Center position
+#define SERVO_PIN 25
+#define SERVO_MIN_ANGLE 0
+#define SERVO_MAX_ANGLE 180
+#define SERVO_CENTER_ANGLE 90
 
 // ============================================
 // VAD (Voice Activity Detection) Settings
 // ============================================
-#define VAD_NOISE_ALPHA 0.995f           // Noise floor smoothing (0.99-0.999)
-#define VAD_ON_MULTIPLIER 3.0f           // Voice detection threshold multiplier
-#define VAD_OFF_MULTIPLIER 1.8f          // Silence detection threshold multiplier
-#define VAD_MIN_TALK_MS 500              // Minimum speech duration (ms)
-#define VAD_SILENCE_END_MS 350           // Silence duration to end speech (ms)
-#define VAD_MAX_TALK_MS 8000             // Maximum speech duration (ms)
-#define VAD_INITIAL_NOISE_FLOOR 120.0f   // Initial noise floor estimate
+#define VAD_NOISE_ALPHA 0.995f
+#define VAD_ON_MULTIPLIER 3.0f
+#define VAD_OFF_MULTIPLIER 1.8f
+#define VAD_MIN_TALK_MS 500
+#define VAD_SILENCE_END_MS 350
+#define VAD_MAX_TALK_MS 8000
+#define VAD_INITIAL_NOISE_FLOOR 120.0f
 
 // ============================================
 // Audio Settings
 // ============================================
-#define AUDIO_SAMPLE_RATE 16000          // Sample rate (Hz)
-#define AUDIO_FRAME_SIZE 320             // Samples per frame (20ms at 16kHz)
-#define PREROLL_MS 200                   // Pre-roll buffer duration (ms)
-#define AUDIO_RING_BUFFER_SIZE 32768     // TTS playback buffer size (32KB)
-#define ENABLE_BUTTON_INTERRUPT 1        // 1: 버튼으로 TTS 중단 가능, 0: 비활성화
+#define AUDIO_SAMPLE_RATE 16000
+#define AUDIO_FRAME_SIZE 320
+#define PREROLL_MS 200
+#define AUDIO_RING_BUFFER_SIZE 32768
+#define ENABLE_BUTTON_INTERRUPT 1
 
 // ============================================
 // Connection Settings
 // ============================================
-#define WIFI_RECONNECT_INTERVAL_MS 5000  // WiFi reconnection interval (ms)
-#define PING_INTERVAL_MS 3000            // Server ping interval (ms)
+#define WIFI_RECONNECT_INTERVAL_MS 5000
+#define PING_INTERVAL_MS 3000
 
 // ============================================
 // LED Colors (RGB)
@@ -68,5 +71,10 @@ const uint16_t SERVER_PORT = 5001;       // Server Port
 #define LED_COLOR_PLAYING_R 255
 #define LED_COLOR_PLAYING_G 255
 #define LED_COLOR_PLAYING_B 0
+
+// ============================================
+// RX buffer limit (protocol)
+// ============================================
+#define RX_AUDIO_MAX_ALLOC 16384
 
 #endif // CONFIG_H

@@ -1,3 +1,8 @@
+"""
+Whisper 기반 음성 인식(STT) 엔진 모듈
+- faster-whisper를 사용한 한국어 음성 인식
+- GPU/CPU 자동 폴백 및 스레드 안전 처리
+"""
 import logging
 import threading
 import numpy as np
@@ -8,15 +13,30 @@ log = logging.getLogger(__name__)
 
 
 class STTEngine:
+    """
+    음성 인식 엔진 클래스
+    - Whisper 모델 로딩 및 관리
+    - 스레드 안전한 음성 인식 처리
+    """
     def __init__(self, model_size: str, device: str, language: str = "ko"):
+        """
+        STT 엔진 초기화
+        - model_size: Whisper 모델 크기 (tiny, base, small, medium, large)
+        - device: 실행 디바이스 (cuda, cpu)
+        - language: 인식 언어 (기본값: 한국어)
+        """
         self.model_size = model_size
         self.device = device
         self.language = language
-        self.model_lock = threading.Lock()
+        self.model_lock = threading.Lock()  # 모델 접근 동기화를 위한 락
         self.model = None
         self.device_in_use = None
 
     def load_model(self, device: str):
+        """
+        Whisper 모델을 지정된 디바이스에 로드
+        - GPU 사용 시 float16, CPU 사용 시 int8 정밀도 사용
+        """
         log.info("Loading STT model: %s on %s...", self.model_size, device)
         m = WhisperModel(
             self.model_size,
@@ -30,6 +50,10 @@ class STTEngine:
         log.info("STT model loaded on %s", device)
 
     def ensure_model(self):
+        """
+        모델이 로드되지 않은 경우 자동 로드
+        - GPU 로드 실패 시 CPU로 자동 폴백
+        """
         if self.model is None:
             try:
                 self.load_model(self.device)
@@ -38,37 +62,46 @@ class STTEngine:
                 self.load_model("cpu")
 
     def safe_transcribe(self, pcm_f32: np.ndarray):
+        """
+        스레드 안전한 음성 인식 수행
+        - VAD 필터링 및 한국어 최적화 파라미터 적용
+        - CUDA 런타임 오류 시 CPU로 자동 전환
+        """
         self.ensure_model()
+        # 연속 메모리 배열로 변환 (성능 최적화)
         pcm_f32 = np.ascontiguousarray(pcm_f32, dtype=np.float32)
 
         def _run():
+            # Whisper 음성 인식 실행 (한국어 최적화 설정)
             segments, info = self.model.transcribe(
                 pcm_f32,
                 language=self.language,
-                beam_size=5,
-                temperature=0.0,
-                condition_on_previous_text=False,
-                repetition_penalty=1.15,
-                no_repeat_ngram_size=3,
-                log_prob_threshold=-1.2,
-                no_speech_threshold=0.6,
-                compression_ratio_threshold=2.4,
-                vad_filter=True,
+                beam_size=5,                        # 빔 서치 크기
+                temperature=0.0,                    # 결정적 출력을 위한 온도 설정
+                condition_on_previous_text=False,   # 이전 텍스트 조건부 비활성화
+                repetition_penalty=1.15,            # 반복 억제
+                no_repeat_ngram_size=3,            # N-gram 반복 방지
+                log_prob_threshold=-1.2,           # 로그 확률 임계값
+                no_speech_threshold=0.6,           # 무음 감지 임계값
+                compression_ratio_threshold=2.4,    # 압축 비율 임계값
+                vad_filter=True,                   # VAD 필터 활성화
                 vad_parameters=dict(
-                    threshold=0.5,
-                    min_speech_duration_ms=200,
-                    min_silence_duration_ms=150,
-                    speech_pad_ms=120,
+                    threshold=0.5,                 # VAD 임계값
+                    min_speech_duration_ms=200,    # 최소 음성 지속 시간
+                    min_silence_duration_ms=150,   # 최소 침묵 지속 시간
+                    speech_pad_ms=120,             # 음성 패딩
                 ),
-                suppress_blank=True,
+                suppress_blank=True,               # 빈 출력 억제
             )
             return list(segments), info
 
+        # 스레드 안전 실행
         with self.model_lock:
             try:
                 return _run()
             except RuntimeError as exc:
                 msg = str(exc)
+                # CUDA 런타임 오류 감지 및 CPU 폴백
                 if "cublas64_12.dll" in msg or "cublas" in msg:
                     log.error("CUDA runtime missing/broken -> switching to CPU now.")
                     self.load_model("cpu")

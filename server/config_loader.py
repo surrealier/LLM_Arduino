@@ -1,3 +1,9 @@
+"""
+설정 관리 모듈
+- config.yaml과 환경 변수를 통합하여 설정 제공
+- 싱글톤 패턴으로 전역 설정 관리
+- 기본값 제공 및 동적 설정 병합
+"""
 import os
 import yaml
 import logging
@@ -13,6 +19,7 @@ class Config:
     환경 변수가 우선순위 높음
     """
     
+    # 기본 설정값 정의 (모든 필수 설정 포함)
     DEFAULT_CONFIG = {
         "server": {
             "host": "0.0.0.0",
@@ -24,8 +31,8 @@ class Config:
             "language": "ko"
         },
         "llm": {
-            "model_name": "Qwen/Qwen2.5-0.5B-Instruct",
-            "device": "cuda"
+            "base_url": "http://localhost:11434",
+            "model": "qwen2.5:0.5b"
         },
         "tts": {
             "voice": "ko-KR-SunHiNeural"
@@ -38,7 +45,8 @@ class Config:
         },
         "weather": {
             "api_key": "",
-            "location": "Seoul"
+            "lat": 37.5665,
+            "lon": 126.9780
         },
         "context": {
             "max_history": 20,
@@ -115,7 +123,6 @@ class Config:
             if "DEVICE" in os.environ:
                 device = os.environ["DEVICE"]
                 self.config["stt"]["device"] = device
-                self.config["llm"]["device"] = device
             
             if "ASSISTANT_NAME" in os.environ:
                 self.config["assistant"]["name"] = os.environ["ASSISTANT_NAME"]

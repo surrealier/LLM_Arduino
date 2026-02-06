@@ -1,1 +1,4 @@
-"""Server package for modularized components."""
+"""
+서버 패키지 초기화 모듈
+- 모듈화된 컴포넌트들을 위한 패키지 정의
+"""

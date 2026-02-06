@@ -1,3 +1,9 @@
+"""
+설정 관리 모듈
+- config.yaml과 환경 변수를 통합하여 설정 제공
+- 싱글톤 패턴으로 전역 설정 관리
+- 기본값 제공 및 동적 설정 병합
+"""
 import os
 import yaml
 import logging
@@ -13,6 +19,7 @@ class Config:
     환경 변수가 우선순위 높음
     """
     
+    # 기본 설정값 정의 (모든 필수 설정 포함)
     DEFAULT_CONFIG = {
         "server": {
             "host": "0.0.0.0",

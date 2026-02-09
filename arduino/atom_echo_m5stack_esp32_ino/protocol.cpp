@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // protocol.cpp — 패킷 프로토콜 구현
 // ============================================================
 // 역할: 바이너리 패킷의 송신/수신, JSON CMD 파싱,
@@ -53,7 +53,7 @@ static uint8_t* audio_ring_buffer = nullptr;  // 첫 AUDIO_OUT 수신 시 malloc
 static size_t audio_ring_head = 0;   // 쓰기 위치
 static size_t audio_ring_tail = 0;   // 읽기 위치
 static size_t audio_ring_size = AUDIO_PLAY_BUFFER_SIZE;
-static bool audio_playing = false;   // 재생 진행 중 플래그
+static bool audio_playing = false;
 
 // PING 타이밍
 static uint32_t last_ping_ms = 0;
@@ -442,7 +442,6 @@ void protocol_audio_process() {
     size_t chunk_size = audio_ring_pop(play_buffer, sizeof(play_buffer));
     chunk_size = (chunk_size / 2) * 2;  // 2바이트(1샘플) 단위 정렬
     if (chunk_size >= 2) {
-      // 비블로킹 재생: 16kHz mono PCM16LE
       M5.Speaker.playRaw((const int16_t*)play_buffer, chunk_size / 2, 16000, false, 1, 0);
     }
   }

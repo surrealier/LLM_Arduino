@@ -212,7 +212,7 @@ static void handleAudioOut(const uint8_t* payload, uint16_t len) {
   if (!audio_ring_push(payload, len)) return;
 
   // 충분한 데이터가 모이면 재생 시작 (4KB = ~128ms @16kHz)
-  if (!audio_playing && audio_ring_used() >= 4096) {
+  if (!audio_playing && audio_ring_used() >= 1024) {
     audio_playing = true;
     M5.Speaker.setVolume(255);
   }
@@ -460,7 +460,7 @@ bool protocol_is_audio_playing() {
 
 // protocol_has_audio_buffered — 링버퍼에 재생 가능한 오디오가 쌓였는지
 bool protocol_has_audio_buffered() {
-  return audio_ring_used() >= 4096;
+  return audio_ring_used() > 0;
 }
 
 // protocol_clear_audio_buffer — TTS 즉시 중단 (버튼 인터럽트용)

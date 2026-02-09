@@ -438,7 +438,7 @@ void protocol_audio_process() {
   if (!audio_playing) return;
 
   if (!M5.Speaker.isPlaying() && audio_ring_used() > 0) {
-    static uint8_t play_buffer[8192];  // 재생 청크 버퍼 (static: 스택 절약)
+    static uint8_t play_buffer[2048];  // 재생 청크 버퍼 (작게: 블로킹 최소화)
     size_t chunk_size = audio_ring_pop(play_buffer, sizeof(play_buffer));
     chunk_size = (chunk_size / 2) * 2;  // 2바이트(1샘플) 단위 정렬
     if (chunk_size >= 2) {

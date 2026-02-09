@@ -23,7 +23,7 @@ PTYPE_AUDIO_OUT = 0x12      # 오디오 출력 데이터 (서버 → ESP32)
 PTYPE_BUFFER_STATUS = 0x13  # 버퍼 상태 보고 (선택적)
 
 
-def recv_exact(conn: socket.socket, n: int, max_timeouts: int = 20) -> Optional[bytes]:
+def recv_exact(conn: socket.socket, n: int, max_timeouts: int = 120) -> Optional[bytes]:
     """
     정확히 n바이트를 수신하는 함수
     - 타임아웃 발생 시 재시도하며, 최대 횟수 초과 시 None 반환

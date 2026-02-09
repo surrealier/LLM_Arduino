@@ -48,6 +48,8 @@ PrerollBuffer preroll;       // VAD 시작 전 프리롤 오디오 버퍼
 // Half-duplex 제어: TTS 재생 중 마이크 비활성화 추적
 // M5.Mic.isEnabled() 대신 플래그를 사용하여 end/begin 반복 호출 방지
 static bool mic_disabled = false;
+static uint32_t last_play_end_ms = 0;
+static bool was_playing_or_buffered = false;
 
 // ────────────────────────────────────────────
 // frame_rms — 오디오 프레임의 RMS(Root Mean Square) 계산
@@ -137,6 +139,11 @@ void loop() {
   // TTS 재생 중에는 마이크를 끄고, 재생 완료 후 다시 켬.
   // mic_disabled 플래그로 전환을 1회만 수행 (I2S 재설정 비용 절감)
   bool will_play = protocol_is_audio_playing() || protocol_has_audio_buffered();
+  // 재생 종료 순간 기록 (버퍼까지 모두 비었을 때만 종료로 간주)
+  if (was_playing_or_buffered && !will_play) {
+    last_play_end_ms = millis();
+  }
+  was_playing_or_buffered = will_play;
 
   if (will_play && !mic_disabled) {
     // TTS 재생 시작 → 마이크 비활성화
@@ -150,7 +157,8 @@ void loop() {
 
   bool is_playing = protocol_is_audio_playing();
   bool has_buffered_audio = protocol_has_audio_buffered();
-  if (!is_playing && !has_buffered_audio && mic_disabled) {
+  bool cooldown_done = (millis() - last_play_end_ms) >= 1000;
+  if (!is_playing && !has_buffered_audio && cooldown_done && mic_disabled) {
     // TTS 재생 완료 → 마이크 재활성화
     auto mic_cfg = M5.Mic.config();
     mic_cfg.sample_rate = AUDIO_SAMPLE_RATE;
@@ -160,7 +168,7 @@ void loop() {
   }
 
   // ── 음성 입력 처리 (마이크 활성 + TTS 미재생 시만) ──
-  if (!mic_disabled && !is_playing && !has_buffered_audio) {
+  if (!mic_disabled && !is_playing && !has_buffered_audio && cooldown_done) {
     static int16_t frame_buf[AUDIO_FRAME_SIZE];  // 20ms 프레임 버퍼 (static: 스택 절약)
 
     if (M5.Mic.record(frame_buf, AUDIO_FRAME_SIZE, AUDIO_SAMPLE_RATE)) {

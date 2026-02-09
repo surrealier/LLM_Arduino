@@ -51,6 +51,14 @@ static bool mic_disabled = false;
 static uint32_t last_play_end_ms = 0;
 static bool was_playing_or_buffered = false;
 
+// Reinitialize speaker after mic end (Atom Echo shares I2S lines).
+static void speaker_reinit() {
+  auto spk_cfg = M5.Speaker.config();
+  M5.Speaker.config(spk_cfg);
+  M5.Speaker.begin();
+  M5.Speaker.setVolume(255);
+}
+
 // ────────────────────────────────────────────
 // frame_rms — 오디오 프레임의 RMS(Root Mean Square) 계산
 // ────────────────────────────────────────────
@@ -86,10 +94,7 @@ void setup() {
   connection_init(&conn_state, SSID, PASS);
 
   // 스피커 초기화 (NS4168 I2S DAC, M5Unified가 핀 자동 설정)
-  auto spk_cfg = M5.Speaker.config();
-  M5.Speaker.config(spk_cfg);
-  M5.Speaker.begin();
-  M5.Speaker.setVolume(255);
+  speaker_reinit();
 
   // 마이크 초기화 (SPM1423 PDM, 16kHz 샘플레이트)
   auto mic_cfg = M5.Mic.config();
@@ -148,7 +153,9 @@ void loop() {
   if (will_play && !mic_disabled) {
     // TTS 재생 시작 → 마이크 비활성화
     M5.Mic.end();
+    speaker_reinit();
     mic_disabled = true;
+    Serial.println("[AUDIO] Mic end -> Speaker reinit");
     vad_init(&vad_state);     // VAD 상태 리셋 (잔여 음성 데이터 무효화)
     preroll_init(&preroll);   // 프리롤 버퍼 리셋
   }
@@ -165,6 +172,7 @@ void loop() {
     M5.Mic.config(mic_cfg);
     M5.Mic.begin();
     mic_disabled = false;
+    Serial.println("[AUDIO] Mic begin (after TTS)");
   }
 
   // ── 음성 입력 처리 (마이크 활성 + TTS 미재생 시만) ──

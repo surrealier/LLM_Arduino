@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // protocol.cpp — 패킷 프로토콜 구현
 // ============================================================
 // 역할: 바이너리 패킷의 송신/수신, JSON CMD 파싱,
@@ -53,7 +53,8 @@ static uint8_t* audio_ring_buffer = nullptr;  // 첫 AUDIO_OUT 수신 시 malloc
 static size_t audio_ring_head = 0;   // 쓰기 위치
 static size_t audio_ring_tail = 0;   // 읽기 위치
 static size_t audio_ring_size = AUDIO_PLAY_BUFFER_SIZE;
-static bool audio_playing = false;   // 재생 진행 중 플래그
+static bool audio_playing = false;
+static uint32_t last_audio_log_ms = 0;
 
 // PING 타이밍
 static uint32_t last_ping_ms = 0;
@@ -211,8 +212,15 @@ static void handleAudioOut(const uint8_t* payload, uint16_t len) {
 
   if (!audio_ring_push(payload, len)) return;
 
-  // 충분한 데이터가 모이면 재생 시작 (4KB = ~128ms @16kHz)
-  if (!audio_playing && audio_ring_used() >= 4096) {
+  // Throttled log (about once per 500ms)
+  uint32_t now = millis();
+  if (now - last_audio_log_ms >= 500) {
+    last_audio_log_ms = now;
+    Serial.printf("[AUDIO_OUT] push=%uB ring_used=%u\n", (unsigned)len, (unsigned)audio_ring_used());
+  }
+
+  
+  if (!audio_playing && audio_ring_used() >= 1024) {
     audio_playing = true;
     M5.Speaker.setVolume(255);
   }
@@ -442,7 +450,12 @@ void protocol_audio_process() {
     size_t chunk_size = audio_ring_pop(play_buffer, sizeof(play_buffer));
     chunk_size = (chunk_size / 2) * 2;  // 2바이트(1샘플) 단위 정렬
     if (chunk_size >= 2) {
-      // 비블로킹 재생: 16kHz mono PCM16LE
+      uint32_t now = millis();
+      if (now - last_audio_log_ms >= 500) {
+        last_audio_log_ms = now;
+        Serial.printf("[AUDIO_PLAY] chunk=%uB ring_used=%u\n", (unsigned)chunk_size, (unsigned)audio_ring_used());
+      }
+
       M5.Speaker.playRaw((const int16_t*)play_buffer, chunk_size / 2, 16000, false, 1, 0);
     }
   }
@@ -460,7 +473,7 @@ bool protocol_is_audio_playing() {
 
 // protocol_has_audio_buffered — 링버퍼에 재생 가능한 오디오가 쌓였는지
 bool protocol_has_audio_buffered() {
-  return audio_ring_used() >= 4096;
+  return audio_ring_used() > 0;
 }
 
 // protocol_clear_audio_buffer — TTS 즉시 중단 (버튼 인터럽트용)

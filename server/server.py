@@ -8,6 +8,10 @@ import os
 import signal
 import threading
 import time
+import subprocess
+import shlex
+import urllib.parse
+import urllib.request
 from queue import Empty
 
 import numpy as np
@@ -58,6 +62,71 @@ def load_commands_config(path: str = "commands.yaml"):
             ACTIONS_CONFIG = data.get("commands", [])
     except Exception:
         ACTIONS_CONFIG = []
+
+
+def _ollama_health_check(base_url: str, timeout: float = 1.0) -> bool:
+    try:
+        parsed = urllib.parse.urlparse(base_url)
+        scheme = parsed.scheme or "http"
+        host = parsed.hostname or "localhost"
+        port = parsed.port or (443 if scheme == "https" else 80)
+        path = parsed.path.rstrip("/")
+        url = f"{scheme}://{host}:{port}{path}/api/tags"
+        req = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return 200 <= resp.status < 300
+    except Exception:
+        return False
+
+
+def _normalize_start_command(start_command):
+    if not start_command:
+        return None
+    if isinstance(start_command, (list, tuple)):
+        return [str(part) for part in start_command]
+    if isinstance(start_command, str):
+        return shlex.split(start_command, posix=False)
+    return None
+
+
+def ensure_ollama_running(base_url: str, llm_config: dict):
+    log = __import__("logging").getLogger("server")
+    if _ollama_health_check(base_url):
+        log.info("Ollama already running at %s", base_url)
+        return True
+
+    auto_start = llm_config.get("auto_start", True)
+    if not auto_start:
+        log.warning("Ollama not detected at %s (auto_start disabled)", base_url)
+        return False
+
+    start_command = _normalize_start_command(llm_config.get("start_command", "ollama serve"))
+    if not start_command:
+        log.warning("Ollama not detected at %s (no start command configured)", base_url)
+        return False
+
+    log.warning("Ollama not detected at %s. Starting: %s", base_url, " ".join(start_command))
+    try:
+        subprocess.Popen(
+            start_command,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
+        )
+    except Exception as exc:
+        log.error("Failed to start Ollama: %s", exc)
+        return False
+
+    startup_timeout = float(llm_config.get("startup_timeout", 10.0))
+    deadline = time.time() + startup_timeout
+    while time.time() < deadline:
+        if _ollama_health_check(base_url, timeout=1.0):
+            log.info("Ollama is up at %s", base_url)
+            return True
+        time.sleep(0.5)
+
+    log.warning("Ollama did not become ready within %.1fs", startup_timeout)
+    return False
 
 
 def handle_connection(conn, addr, stt_engine: STTEngine, config):
@@ -332,6 +401,7 @@ def main():
 
     # 단일 LLM 클라이언트 생성
     llm_config = config.get_llm_config()
+    ensure_ollama_running(llm_config.get("base_url", "http://localhost:11434"), llm_config)
     llm_client = LLMClient(
         base_url=llm_config.get("base_url", "http://localhost:11434"),
         model=llm_config.get("model", "qwen2.5:0.5b"),

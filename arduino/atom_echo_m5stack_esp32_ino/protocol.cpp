@@ -194,6 +194,8 @@ static size_t audio_ring_pop(uint8_t* data, size_t max_len) {
 // 서버에서 스트리밍되는 TTS PCM 데이터를 링 버퍼에 저장.
 // 4KB 이상 축적되면 재생 시작 (초기 버퍼링으로 끊김 방지)
 static void handleAudioOut(const uint8_t* payload, uint16_t len) {
+  // 16-bit PCM alignment (1 sample = 2 bytes)
+  if (len & 0x01) len -= 1;
   if (len < 2) return;  // 최소 1샘플(2B) 필요
 
   // 링 버퍼 최초 할당 (lazy initialization, 메모리 절약)
@@ -454,6 +456,11 @@ void protocol_audio_process() {
 // protocol_is_audio_playing — TTS 재생 중 여부 (링 버퍼 OR 스피커 하드웨어)
 bool protocol_is_audio_playing() {
   return audio_playing || M5.Speaker.isPlaying();
+}
+
+// protocol_has_audio_buffered — 링버퍼에 재생 가능한 오디오가 쌓였는지
+bool protocol_has_audio_buffered() {
+  return audio_ring_used() >= 4096;
 }
 
 // protocol_clear_audio_buffer — TTS 즉시 중단 (버튼 인터럽트용)

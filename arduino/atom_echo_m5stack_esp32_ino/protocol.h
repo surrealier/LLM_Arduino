@@ -42,4 +42,5 @@ void protocol_audio_process();                 // 링 버퍼 → 스피커 재�
 bool protocol_is_audio_playing();              // TTS 재생 중 여부
 void protocol_clear_audio_buffer();            // TTS 버퍼 즉시 비우기 (인터럽트)
 
+bool protocol_has_audio_buffered();            // 링버퍼에 재생 가능한 오디오가 쌓였는지
 #endif

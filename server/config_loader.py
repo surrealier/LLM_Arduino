@@ -32,7 +32,10 @@ class Config:
         },
         "llm": {
             "base_url": "http://localhost:11434",
-            "model": "qwen2.5:0.5b"
+            "model": "qwen2.5:0.5b",
+            "auto_start": True,
+            "start_command": "ollama serve",
+            "startup_timeout": 10.0
         },
         "tts": {
             "voice": "ko-KR-SunHiNeural"

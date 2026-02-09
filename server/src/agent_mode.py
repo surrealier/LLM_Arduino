@@ -295,7 +295,7 @@ class AgentMode:
 
             import librosa
             try:
-                from audio_processor import normalize_to_dbfs, qc, trim_energy
+                from .audio_processor import normalize_to_dbfs, qc, trim_energy
                 audio_proc_available = True
             except ModuleNotFoundError:
                 audio_proc_available = False

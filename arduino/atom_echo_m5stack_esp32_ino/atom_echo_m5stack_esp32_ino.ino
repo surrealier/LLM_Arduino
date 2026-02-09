@@ -69,6 +69,8 @@ static inline float frame_rms(const int16_t* x, size_t n) {
 void setup() {
   // M5Unified 프레임워크 초기화 (I2S, LED, 버튼 등 자동 설정)
   auto cfg = M5.config();
+  cfg.internal_mic = true;
+  cfg.internal_spk = true;
   M5.begin(cfg);
   Serial.begin(115200);
   delay(500);  // 시리얼 안정화 대기
@@ -128,21 +130,26 @@ void loop() {
   // ── 프로토콜 송수신 ──
   protocol_send_ping_if_needed(client);  // 3초마다 keepalive PING
   protocol_poll(client);                  // 서버→ESP32 패킷 수신 및 디스패치
-  protocol_audio_process();               // 링 버퍼 → 스피커 재생 처리
+  // 오디오 재생은 마이크 전환 이후에 수행
 
   // ── Half-duplex 마이크/스피커 전환 ──
   // Atom Echo는 I2S 버스를 마이크와 스피커가 공유하므로
   // TTS 재생 중에는 마이크를 끄고, 재생 완료 후 다시 켬.
   // mic_disabled 플래그로 전환을 1회만 수행 (I2S 재설정 비용 절감)
-  bool is_playing = protocol_is_audio_playing();
+  bool will_play = protocol_is_audio_playing() || protocol_has_audio_buffered();
 
-  if (is_playing && !mic_disabled) {
+  if (will_play && !mic_disabled) {
     // TTS 재생 시작 → 마이크 비활성화
     M5.Mic.end();
     mic_disabled = true;
     vad_init(&vad_state);     // VAD 상태 리셋 (잔여 음성 데이터 무효화)
     preroll_init(&preroll);   // 프리롤 버퍼 리셋
-  } else if (!is_playing && mic_disabled) {
+  }
+
+  protocol_audio_process();               // 링 버퍼 → 스피커 재생 처리
+
+  bool is_playing = protocol_is_audio_playing();
+  if (!is_playing && mic_disabled) {
     // TTS 재생 완료 → 마이크 재활성화
     auto mic_cfg = M5.Mic.config();
     mic_cfg.sample_rate = AUDIO_SAMPLE_RATE;

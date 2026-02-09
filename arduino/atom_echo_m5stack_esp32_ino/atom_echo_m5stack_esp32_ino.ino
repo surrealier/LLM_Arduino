@@ -149,7 +149,8 @@ void loop() {
   protocol_audio_process();               // 링 버퍼 → 스피커 재생 처리
 
   bool is_playing = protocol_is_audio_playing();
-  if (!is_playing && mic_disabled) {
+  bool has_buffered_audio = protocol_has_audio_buffered();
+  if (!is_playing && !has_buffered_audio && mic_disabled) {
     // TTS 재생 완료 → 마이크 재활성화
     auto mic_cfg = M5.Mic.config();
     mic_cfg.sample_rate = AUDIO_SAMPLE_RATE;
@@ -159,7 +160,7 @@ void loop() {
   }
 
   // ── 음성 입력 처리 (마이크 활성 + TTS 미재생 시만) ──
-  if (!mic_disabled && !is_playing) {
+  if (!mic_disabled && !is_playing && !has_buffered_audio) {
     static int16_t frame_buf[AUDIO_FRAME_SIZE];  // 20ms 프레임 버퍼 (static: 스택 절약)
 
     if (M5.Mic.record(frame_buf, AUDIO_FRAME_SIZE, AUDIO_SAMPLE_RATE)) {

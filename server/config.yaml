@@ -14,7 +14,7 @@ stt:
 # LLM Settings (Ollama)
 llm:
   base_url: "http://localhost:11434"
-  model: "qwen2.5:0.5b"
+  model: "qwen3:8b"
 
 # TTS (Text-to-Speech) Settings
 tts:

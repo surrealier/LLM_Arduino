@@ -67,3 +67,6 @@ python stt.py
 - ESP32 측 action 처리(서보 제어, LED 피드백 등) 구현.
 - JSON schema 확장(여러 액션, 파라미터 추가) 및 에러 핸들링.
 - STT 후 TTS/응답 음성 재생 파이프라인 추가.
+
+## Bind Error Note
+- WinError 10013 on bind: server may fall back to another port. Check logs for the actual port and update SERVER_PORT on ESP32 (or set env SERVER_PORT before starting the server).

@@ -1,4 +1,4 @@
-"""
+﻿"""
 에이전트 모드 처리 모듈
 - 가정용 AI 어시스턴트 기능 제공
 - 대화 기록 관리 및 컨텍스트 유지
@@ -276,10 +276,32 @@ class AgentMode:
     def text_to_audio(self, text: str):
         """텍스트를 오디오로 변환 - TTS 생성 및 오디오 후처리"""
         try:
-            import librosa
             import os
-            from audio_processor import normalize_to_dbfs, qc, trim_energy
+            import importlib
 
+            missing = []
+            for mod in ("librosa", "soundfile", "edge_tts"):
+                try:
+                    importlib.import_module(mod)
+                except ModuleNotFoundError:
+                    missing.append(mod)
+            if missing:
+                log.error(
+                    "TTS dependency missing: %s (install: pip install %s)",
+                    ", ".join(missing),
+                    " ".join(missing),
+                )
+                return b""
+
+            import librosa
+            try:
+                from audio_processor import normalize_to_dbfs, qc, trim_energy
+                audio_proc_available = True
+            except ModuleNotFoundError:
+                audio_proc_available = False
+                log.warning(
+                    "audio_processor not found; skipping trim/normalize/qc post-processing"
+                )
             tmp_mp3 = "temp_tts.mp3"
 
             log.info("Generating TTS for: %s", text[:50])
@@ -293,8 +315,11 @@ class AgentMode:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
 
-            loop.run_until_complete(self._tts_gen(text, tmp_mp3))
-
+            try:
+                loop.run_until_complete(self._tts_gen(text, tmp_mp3))
+            except Exception as exc:
+                log.error("TTS generation failed in _tts_gen: %s", exc, exc_info=True)
+                return b""
             if not os.path.exists(tmp_mp3):
                 log.error("TTS file not created: %s", tmp_mp3)
                 return b""
@@ -308,33 +333,44 @@ class AgentMode:
 
             # 오디오 후처리 - DC 오프셋 제거 및 무음 구간 트림
             pcm_f32 = (pcm_f32 - np.mean(pcm_f32)).astype(np.float32, copy=False)
-            pcm_f32 = trim_energy(pcm_f32, sr=sr, top_db=35.0, pad_ms=140)
+            if audio_proc_available:
+                pcm_f32 = trim_energy(pcm_f32, sr=sr, top_db=35.0, pad_ms=140)
 
-            # 음량 정규화 - RMS 기반 볼륨 조정
-            pcm_f32 = normalize_to_dbfs(pcm_f32, target_dbfs=-12.0, max_gain_db=24.0)
-            peak = float(np.max(np.abs(pcm_f32))) if pcm_f32.size else 0.0
-            if peak > 0.98:
-                pcm_f32 = (pcm_f32 / peak * 0.98).astype(np.float32, copy=False)
-
+                # 음량 정규화 - RMS 기반 볼륨 조정
+                pcm_f32 = normalize_to_dbfs(pcm_f32, target_dbfs=-12.0, max_gain_db=24.0)
+                peak = float(np.max(np.abs(pcm_f32))) if pcm_f32.size else 0.0
+                if peak > 0.98:
+                    pcm_f32 = (pcm_f32 / peak * 0.98).astype(np.float32, copy=False)
             # 16-bit PCM 변환 (PCM16LE)
             pcm_16 = (pcm_f32 * 32767.0).astype("<i2")
             audio_bytes = pcm_16.tobytes()
 
             # 오디오 품질 검증 및 로깅
-            rms_db, peak, clip = qc(pcm_f32)
-            log.info(
-                "TTS generated: %d bytes, %.2f seconds, RMS: %.2f dBFS, peak: %.3f, clip: %.2f%%",
-                len(audio_bytes),
-                len(pcm_16) / 16000.0,
-                rms_db,
-                peak,
-                clip,
-            )
-
+            if audio_proc_available:
+                rms_db, peak, clip = qc(pcm_f32)
+                log.info(
+                    "TTS generated: %d bytes, %.2f seconds, RMS: %.2f dBFS, peak: %.3f, clip: %.2f%%",
+                    len(audio_bytes),
+                    len(pcm_16) / 16000.0,
+                    rms_db,
+                    peak,
+                    clip,
+                )
+            else:
+                log.info(
+                    "TTS generated: %d bytes, %.2f seconds (post-processing skipped)",
+                    len(audio_bytes),
+                    len(pcm_16) / 16000.0,
+                )
             return audio_bytes
-        except ImportError:
-            log.error("Install edge-tts, librosa, soundfile: pip install edge-tts librosa soundfile")
+        except ModuleNotFoundError as exc:
+            log.error("TTS dependency missing at runtime: %s", exc, exc_info=True)
+            log.error("Install: pip install edge-tts librosa soundfile")
             return b""
         except Exception as exc:
             log.error("TTS failed: %s", exc, exc_info=True)
             return b""
+
+
+
+

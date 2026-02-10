@@ -32,9 +32,9 @@
 // 네트워크 자격증명 및 서버 주소 (여기서 실제 값 정의)
 // config.h의 extern 선언에 대응하는 정의부
 // ────────────────────────────────────────────
-const char* SSID = "<YOUR_SSID>";
-const char* PASS = "<YOUR_PASS>";
-const char* SERVER_IP = "<YOUR_SERVER_IP>";
+const char* SSID = "KT_GiGA_3926";
+const char* PASS = "fbx7bef119";
+const char* SERVER_IP = "172.30.1.20";
 const uint16_t SERVER_PORT = 5001;
 
 // ────────────────────────────────────────────
@@ -52,11 +52,35 @@ static uint32_t last_play_end_ms = 0;
 static bool was_playing_or_buffered = false;
 
 // Reinitialize speaker after mic end (Atom Echo shares I2S lines).
-static void speaker_reinit() {
+// M5Unified Speaker task가 이미 살아있어도 I2S 드라이버는 Mic.begin/end로 바뀔 수 있으므로
+// end()를 먼저 호출해 항상 스피커 I2S를 재설정한다.
+static bool speaker_reinit() {
+  M5.Speaker.stop();
+  M5.Speaker.end();
   auto spk_cfg = M5.Speaker.config();
+  spk_cfg.sample_rate = AUDIO_SAMPLE_RATE;
   M5.Speaker.config(spk_cfg);
-  M5.Speaker.begin();
-  M5.Speaker.setVolume(255);
+  bool ok = M5.Speaker.begin();
+  M5.Speaker.setVolume(180);
+  if (!ok) {
+    Serial.println("[AUDIO] Speaker begin failed");
+  }
+  return ok;
+}
+
+// Reinitialize microphone and release speaker I2S resources first.
+static bool mic_reinit() {
+  M5.Speaker.stop();
+  M5.Speaker.end();
+  M5.Mic.end();
+  auto mic_cfg = M5.Mic.config();
+  mic_cfg.sample_rate = AUDIO_SAMPLE_RATE;
+  M5.Mic.config(mic_cfg);
+  bool ok = M5.Mic.begin();
+  if (!ok) {
+    Serial.println("[AUDIO] Mic begin failed");
+  }
+  return ok;
 }
 
 // ────────────────────────────────────────────
@@ -93,14 +117,22 @@ void setup() {
   // WiFi 연결 시작 (비동기, connection_manage에서 상태 추적)
   connection_init(&conn_state, SSID, PASS);
 
-  // 스피커 초기화 (NS4168 I2S DAC, M5Unified가 핀 자동 설정)
-  speaker_reinit();
-
-  // 마이크 초기화 (SPM1423 PDM, 16kHz 샘플레이트)
+  auto spk_cfg = M5.Speaker.config();
   auto mic_cfg = M5.Mic.config();
-  mic_cfg.sample_rate = AUDIO_SAMPLE_RATE;
-  M5.Mic.config(mic_cfg);
-  M5.Mic.begin();
+  Serial.printf(
+      "[BOOT] board=%d spk(bck=%d ws=%d dout=%d i2s=%d) mic(bck=%d ws=%d din=%d i2s=%d)\n",
+      (int)M5.getBoard(),
+      (int)spk_cfg.pin_bck,
+      (int)spk_cfg.pin_ws,
+      (int)spk_cfg.pin_data_out,
+      (int)spk_cfg.i2s_port,
+      (int)mic_cfg.pin_bck,
+      (int)mic_cfg.pin_ws,
+      (int)mic_cfg.pin_data_in,
+      (int)mic_cfg.i2s_port);
+
+  // 기본 대기 상태는 마이크 활성화(입력), 스피커는 I2S 리소스를 점유하지 않도록 종료
+  mic_reinit();
 
   // 프로토콜 수신 상태머신, VAD, 프리롤 버퍼 초기화
   protocol_init();
@@ -153,11 +185,18 @@ void loop() {
   if (will_play && !mic_disabled) {
     // TTS 재생 시작 → 마이크 비활성화
     M5.Mic.end();
-    speaker_reinit();
-    mic_disabled = true;
-    Serial.println("[AUDIO] Mic end -> Speaker reinit");
-    vad_init(&vad_state);     // VAD 상태 리셋 (잔여 음성 데이터 무효화)
-    preroll_init(&preroll);   // 프리롤 버퍼 리셋
+    if (speaker_reinit()) {
+      mic_disabled = true;
+      Serial.println("[AUDIO] Mic end -> Speaker reinit");
+      vad_init(&vad_state);     // VAD 상태 리셋 (잔여 음성 데이터 무효화)
+      preroll_init(&preroll);   // 프리롤 버퍼 리셋
+    } else {
+      // 스피커 초기화 실패 시 버퍼를 비우고 입력 모드로 복구
+      protocol_clear_audio_buffer();
+      mic_reinit();
+      mic_disabled = false;
+      Serial.println("[AUDIO] Speaker reinit failed -> Mic restored");
+    }
   }
 
   protocol_audio_process();               // 링 버퍼 → 스피커 재생 처리
@@ -167,10 +206,7 @@ void loop() {
   bool cooldown_done = (millis() - last_play_end_ms) >= 1000;
   if (!is_playing && !has_buffered_audio && cooldown_done && mic_disabled) {
     // TTS 재생 완료 → 마이크 재활성화
-    auto mic_cfg = M5.Mic.config();
-    mic_cfg.sample_rate = AUDIO_SAMPLE_RATE;
-    M5.Mic.config(mic_cfg);
-    M5.Mic.begin();
+    mic_reinit();
     mic_disabled = false;
     Serial.println("[AUDIO] Mic begin (after TTS)");
   }

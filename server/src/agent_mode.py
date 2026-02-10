@@ -337,10 +337,10 @@ class AgentMode:
                 pcm_f32 = trim_energy(pcm_f32, sr=sr, top_db=35.0, pad_ms=140)
 
                 # 음량 정규화 - RMS 기반 볼륨 조정
-                pcm_f32 = normalize_to_dbfs(pcm_f32, target_dbfs=-12.0, max_gain_db=24.0)
+                pcm_f32 = normalize_to_dbfs(pcm_f32, target_dbfs=-18.0, max_gain_db=18.0)
                 peak = float(np.max(np.abs(pcm_f32))) if pcm_f32.size else 0.0
-                if peak > 0.98:
-                    pcm_f32 = (pcm_f32 / peak * 0.98).astype(np.float32, copy=False)
+                if peak > 0.90:
+                    pcm_f32 = (pcm_f32 / peak * 0.90).astype(np.float32, copy=False)
             # 16-bit PCM 변환 (PCM16LE)
             pcm_16 = (pcm_f32 * 32767.0).astype("<i2")
             audio_bytes = pcm_16.tobytes()
@@ -370,7 +370,6 @@ class AgentMode:
         except Exception as exc:
             log.error("TTS failed: %s", exc, exc_info=True)
             return b""
-
 
 
 

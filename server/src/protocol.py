@@ -58,8 +58,8 @@ def send_packet(
     ptype: int,
     payload: Optional[bytes] = b"",
     lock=None,
-    audio_chunk: int = 2048,
-    audio_sleep_s: float = 0.010,
+    audio_chunk: int = 1024,
+    audio_sleep_s: float = 0.030,
 ) -> bool:
     """
     안정적인 패킷 전송 함수

@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // protocol.cpp — 패킷 프로토콜 구현
 // ============================================================
 // 역할: 바이너리 패킷의 송신/수신, JSON CMD 파싱,
@@ -149,10 +149,18 @@ static size_t audio_ring_used() {
 // audio_ring_push — 데이터를 링 버퍼에 추가
 // 공간 부족 시 오래된 데이터를 버리고 새 데이터 수용 (오디오 끊김 최소화)
 static bool audio_ring_push(const uint8_t* data, size_t len) {
+  // PCM16 샘플 경계 유지: tail이 홀수 바이트면 1바이트 버려 정렬 복구
+  if (audio_ring_tail & 0x01) {
+    audio_ring_tail = (audio_ring_tail + 1) % audio_ring_size;
+  }
+
   if (audio_ring_available() < len) {
     // 오버플로 방지: 오래된 데이터 드롭
     size_t to_drop = len - audio_ring_available() + 1024;
+    // 샘플 경계(2바이트) 보존
+    to_drop = (to_drop + 1) & ~((size_t)1);
     size_t used = audio_ring_used();
+    used &= ~((size_t)1);
     if (to_drop > used) to_drop = used;
     audio_ring_tail = (audio_ring_tail + to_drop) % audio_ring_size;
     if (audio_ring_available() < len) return false;
@@ -192,7 +200,7 @@ static size_t audio_ring_pop(uint8_t* data, size_t max_len) {
 
 // handleAudioOut — AUDIO_OUT(0x12) 패킷 처리
 // 서버에서 스트리밍되는 TTS PCM 데이터를 링 버퍼에 저장.
-// 4KB 이상 축적되면 재생 시작 (초기 버퍼링으로 끊김 방지)
+// 1KB 이상 축적되면 재생 시작 (짧은 응답 지연 최소화)
 static void handleAudioOut(const uint8_t* payload, uint16_t len) {
   // 16-bit PCM alignment (1 sample = 2 bytes)
   if (len & 0x01) len -= 1;
@@ -211,10 +219,10 @@ static void handleAudioOut(const uint8_t* payload, uint16_t len) {
 
   if (!audio_ring_push(payload, len)) return;
 
-  // 충분한 데이터가 모이면 재생 시작 (4KB = ~128ms @16kHz)
+  // 충분한 데이터가 모이면 재생 시작 (1KB = ~32ms @16kHz)
   if (!audio_playing && audio_ring_used() >= 1024) {
     audio_playing = true;
-    M5.Speaker.setVolume(255);
+    M5.Speaker.setVolume(180);
   }
 }
 
@@ -432,17 +440,34 @@ void protocol_send_ping_if_needed(WiFiClient& client) {
 
 // protocol_audio_process — 링 버퍼에서 스피커로 오디오 공급
 // M5.Speaker.isPlaying()이 false이고 버퍼에 데이터가 있으면
-// 최대 8KB 청크를 꺼내 비블로킹 재생.
+// 최대 2KB 청크를 꺼내 비블로킹 재생.
 // 버퍼 소진 + 재생 완료 시 audio_playing을 false로 전환.
 void protocol_audio_process() {
   if (!audio_playing) return;
 
-  if (!M5.Speaker.isPlaying() && audio_ring_used() > 0) {
+  size_t used_now = audio_ring_used();
+  // 샘플 경계가 틀어진 상태면 1바이트 버려 복구
+  if (used_now & 0x01) {
+    audio_ring_tail = (audio_ring_tail + 1) % audio_ring_size;
+    used_now -= 1;
+  }
+
+  if (!M5.Speaker.isPlaying() && used_now >= 2) {
     static uint8_t play_buffer[2048];  // 재생 청크 버퍼 (작게: 블로킹 최소화)
+    static uint32_t last_playraw_fail_ms = 0;
     size_t chunk_size = audio_ring_pop(play_buffer, sizeof(play_buffer));
     chunk_size = (chunk_size / 2) * 2;  // 2바이트(1샘플) 단위 정렬
     if (chunk_size >= 2) {
-      M5.Speaker.playRaw((const int16_t*)play_buffer, chunk_size / 2, 16000, false, 1, 0);
+      bool queued = M5.Speaker.playRaw((const int16_t*)play_buffer, chunk_size / 2, 16000, false, 1, 0);
+      if (!queued) {
+        // playRaw 실패 시 데이터 유실 방지를 위해 pop한 청크를 다시 되돌림.
+        audio_ring_tail = (audio_ring_tail + audio_ring_size - chunk_size) % audio_ring_size;
+        uint32_t now = millis();
+        if (now - last_playraw_fail_ms >= 500) {
+          Serial.println("[AUDIO_PROC] playRaw queue failed; retry");
+          last_playraw_fail_ms = now;
+        }
+      }
     }
   }
 

@@ -50,6 +50,7 @@ PrerollBuffer preroll;       // VAD 시작 전 프리롤 오디오 버퍼
 static bool mic_disabled = false;
 static uint32_t last_play_end_ms = 0;
 static bool was_playing_or_buffered = false;
+static constexpr uint32_t MIC_REENABLE_COOLDOWN_MS = 450;
 
 // Reinitialize speaker after mic end (Atom Echo shares I2S lines).
 // M5Unified Speaker task가 이미 살아있어도 I2S 드라이버는 Mic.begin/end로 바뀔 수 있으므로
@@ -203,7 +204,7 @@ void loop() {
 
   bool is_playing = protocol_is_audio_playing();
   bool has_buffered_audio = protocol_has_audio_buffered();
-  bool cooldown_done = (millis() - last_play_end_ms) >= 1000;
+  bool cooldown_done = (millis() - last_play_end_ms) >= MIC_REENABLE_COOLDOWN_MS;
   if (!is_playing && !has_buffered_audio && cooldown_done && mic_disabled) {
     // TTS 재생 완료 → 마이크 재활성화
     mic_reinit();

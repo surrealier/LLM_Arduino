@@ -394,7 +394,7 @@ class AgentMode:
         communicate = edge_tts.Communicate(text, self.tts_voice)
         await communicate.save(output_file)
 
-    def text_to_audio(self, text: str):
+    def text_to_audio(self, text: str, trim_pad_ms: float = 140.0):
         """텍스트를 오디오로 변환 - TTS 생성 및 오디오 후처리"""
         try:
             import os
@@ -456,7 +456,13 @@ class AgentMode:
             # 오디오 후처리 - DC 오프셋 제거 및 무음 구간 트림
             pcm_f32 = (pcm_f32 - np.mean(pcm_f32)).astype(np.float32, copy=False)
             if audio_proc_available:
-                pcm_f32 = trim_energy(pcm_f32, sr=sr, top_db=35.0, pad_ms=140)
+                # 청크형 TTS에서는 pad를 과도하게 주면 경계마다 불필요한 무음이 커진다.
+                pcm_f32 = trim_energy(
+                    pcm_f32,
+                    sr=sr,
+                    top_db=35.0,
+                    pad_ms=max(0.0, float(trim_pad_ms)),
+                )
 
                 # 음량 정규화 - RMS 기반 볼륨 조정
                 pcm_f32 = normalize_to_dbfs(pcm_f32, target_dbfs=-18.0, max_gain_db=18.0)

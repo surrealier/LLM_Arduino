@@ -286,7 +286,16 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
                         audio_chunks = []
                         total_chunks = len(tts_text_chunks)
                         for idx, tts_text in enumerate(tts_text_chunks, start=1):
-                            wav_bytes = agent_handler.text_to_audio(tts_text)
+                            trim_pad_ms = 140.0
+                            if total_chunks > 1:
+                                if idx == 1 or idx == total_chunks:
+                                    trim_pad_ms = 80.0
+                                else:
+                                    trim_pad_ms = 40.0
+                            wav_bytes = agent_handler.text_to_audio(
+                                tts_text,
+                                trim_pad_ms=trim_pad_ms,
+                            )
                             if wav_bytes:
                                 audio_chunks.append((tts_text, wav_bytes))
                             else:
@@ -320,8 +329,8 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
                                 play_duration_s = len(wav_bytes) / (SR * 2)
                                 send_elapsed_s = time.time() - send_started
                                 # 다음 청크를 너무 일찍 보내면 겹침/왜곡이 생길 수 있어
-                                # 약간의 선행 여유(50ms)만 두고 전송한다.
-                                wait_s = max(0.0, play_duration_s - send_elapsed_s - 0.05)
+                                # 선행 여유를 너무 작게 잡으면 청크 경계에서 공백이 생길 수 있다.
+                                wait_s = max(0.0, play_duration_s - send_elapsed_s - 0.15)
                                 if wait_s > 0:
                                     time.sleep(wait_s)
                     else:

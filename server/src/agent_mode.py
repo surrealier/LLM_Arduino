@@ -463,6 +463,16 @@ class AgentMode:
                 peak = float(np.max(np.abs(pcm_f32))) if pcm_f32.size else 0.0
                 if peak > 0.90:
                     pcm_f32 = (pcm_f32 / peak * 0.90).astype(np.float32, copy=False)
+
+            # 청크 경계 클릭 노이즈 완화용 짧은 페이드 인/아웃
+            fade_len = int(sr * 0.008)
+            if pcm_f32.size > 2 and fade_len > 0:
+                fade_len = min(fade_len, pcm_f32.size // 2)
+                if fade_len > 0:
+                    fade = np.linspace(0.0, 1.0, fade_len, dtype=np.float32)
+                    pcm_f32[:fade_len] *= fade
+                    pcm_f32[-fade_len:] *= fade[::-1]
+
             # 16-bit PCM 변환 (PCM16LE)
             pcm_16 = (pcm_f32 * 32767.0).astype("<i2")
             audio_bytes = pcm_16.tobytes()

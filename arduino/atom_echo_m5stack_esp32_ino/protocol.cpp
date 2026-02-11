@@ -439,9 +439,8 @@ void protocol_send_ping_if_needed(WiFiClient& client) {
 }
 
 // protocol_audio_process — 링 버퍼에서 스피커로 오디오 공급
-// isPlaying() 게이트 없이 연속 큐잉: playRaw()가 내부 큐에 추가하고,
-// 큐가 가득 차면 false 반환 → 링 버퍼에 되돌려 다음 사이클에 재시도.
-// 이전 방식(isPlaying 대기)은 청크 사이 무음 갭을 유발하여 단어 앞부분 잘림.
+// 스피커가 idle일 때만 다음 청크를 넘겨 중복 재생/노이즈를 방지한다.
+// playRaw() 실패(큐 가득 참) 시 읽은 데이터를 롤백하여 다음 사이클에 재시도한다.
 void protocol_audio_process() {
   if (!audio_playing) return;
 
@@ -452,15 +451,12 @@ void protocol_audio_process() {
     used_now -= 1;
   }
 
-  if (used_now >= 2) {
+  if (!M5.Speaker.isPlaying() && used_now >= 2) {
     static uint8_t play_buffer[2048];
     static uint32_t last_playraw_fail_ms = 0;
-    int queue_attempts = 0;
-    while (audio_ring_used() >= 2 && queue_attempts < 2) {
-      size_t chunk_size = audio_ring_pop(play_buffer, sizeof(play_buffer));
-      chunk_size = (chunk_size / 2) * 2;
-      if (chunk_size < 2) break;
-
+    size_t chunk_size = audio_ring_pop(play_buffer, sizeof(play_buffer));
+    chunk_size = (chunk_size / 2) * 2;
+    if (chunk_size >= 2) {
       bool queued = M5.Speaker.playRaw((const int16_t*)play_buffer, chunk_size / 2, 16000, false, 1, 0);
       if (!queued) {
         // 큐 가득 참 → 데이터 되돌리고 다음 사이클에 재시도
@@ -470,9 +466,7 @@ void protocol_audio_process() {
           Serial.println("[AUDIO_PROC] playRaw queue full; retry next cycle");
           last_playraw_fail_ms = now;
         }
-        break;
       }
-      queue_attempts++;
     }
   }
 

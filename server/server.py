@@ -311,13 +311,7 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
                                 len(wav_bytes),
                             )
                             send_started = time.time()
-                            success = send_audio(
-                                conn,
-                                wav_bytes,
-                                send_lock,
-                                audio_chunk=2048,
-                                audio_sleep_s=0.050,
-                            )
+                            success = send_audio(conn, wav_bytes, send_lock)
                             if not success:
                                 log.error("Failed to send audio chunk %d/%d", idx, total_audio_chunks)
                                 break
@@ -325,7 +319,9 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
                             if idx < total_audio_chunks:
                                 play_duration_s = len(wav_bytes) / (SR * 2)
                                 send_elapsed_s = time.time() - send_started
-                                wait_s = max(0.0, play_duration_s - send_elapsed_s - 0.20)
+                                # 다음 청크를 너무 일찍 보내면 겹침/왜곡이 생길 수 있어
+                                # 약간의 선행 여유(50ms)만 두고 전송한다.
+                                wait_s = max(0.0, play_duration_s - send_elapsed_s - 0.05)
                                 if wait_s > 0:
                                     time.sleep(wait_s)
                     else:

@@ -132,12 +132,26 @@ def send_action(conn: socket.socket, action_dict: dict, lock=None) -> bool:
     return ok
 
 
-def send_audio(conn: socket.socket, pcm_bytes: bytes, lock=None) -> bool:
+def send_audio(
+    conn: socket.socket,
+    pcm_bytes: bytes,
+    lock=None,
+    audio_chunk: int = 4096,
+    audio_sleep_s: float = 0.050,
+) -> bool:
     """
     ESP32에 오디오 데이터 전송
     - PCM 바이트 데이터를 AUDIO_OUT 패킷으로 전송
+    - audio_chunk/audio_sleep_s로 스트리밍 전송 속도 제어
     """
-    ok = send_packet(conn, PTYPE_AUDIO_OUT, pcm_bytes, lock=lock)
+    ok = send_packet(
+        conn,
+        PTYPE_AUDIO_OUT,
+        pcm_bytes,
+        lock=lock,
+        audio_chunk=audio_chunk,
+        audio_sleep_s=audio_sleep_s,
+    )
     if ok:
         log.info("AUDIO to ESP32: %s bytes", len(pcm_bytes))
     return ok

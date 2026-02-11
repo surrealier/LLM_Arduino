@@ -268,25 +268,66 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
                         continue
 
                     log.info("Agent Mode: Processing text: %s", text)
-                    
+
                     llm_start = time.time()
                     response = agent_handler.generate_response(text)
                     perf_logger.log_llm(time.time() - llm_start)
 
                     if response:
                         log.info("Agent Response: %s", response)
+                        tts_text_chunks = agent_handler.prepare_tts_chunks(response, max_chunks=3)
+                        if not tts_text_chunks:
+                            log.error("TTS text chunks are empty after sanitization")
+                            continue
+                        if len(tts_text_chunks) > 1:
+                            log.info("TTS text split into %d chunks", len(tts_text_chunks))
+
                         tts_start = time.time()
-                        wav_bytes = agent_handler.text_to_audio(response)
-                        perf_logger.log_tts(time.time() - tts_start)
-                        if wav_bytes:
-                            log.info("Sending audio to device: %d bytes", len(wav_bytes))
-                            success = send_audio(conn, wav_bytes, send_lock)
-                            if success:
-                                log.info("Audio sent successfully")
+                        audio_chunks = []
+                        total_chunks = len(tts_text_chunks)
+                        for idx, tts_text in enumerate(tts_text_chunks, start=1):
+                            wav_bytes = agent_handler.text_to_audio(tts_text)
+                            if wav_bytes:
+                                audio_chunks.append((tts_text, wav_bytes))
                             else:
-                                log.error("Failed to send audio to device")
-                        else:
-                            log.error("TTS returned empty bytes")
+                                log.error(
+                                    "TTS chunk failed (%d/%d): %s",
+                                    idx,
+                                    total_chunks,
+                                    tts_text,
+                                )
+                        perf_logger.log_tts(time.time() - tts_start)
+
+                        if not audio_chunks:
+                            log.error("All TTS chunks failed")
+                            continue
+
+                        total_audio_chunks = len(audio_chunks)
+                        for idx, (_, wav_bytes) in enumerate(audio_chunks, start=1):
+                            log.info(
+                                "Sending audio chunk %d/%d: %d bytes",
+                                idx,
+                                total_audio_chunks,
+                                len(wav_bytes),
+                            )
+                            send_started = time.time()
+                            success = send_audio(
+                                conn,
+                                wav_bytes,
+                                send_lock,
+                                audio_chunk=2048,
+                                audio_sleep_s=0.050,
+                            )
+                            if not success:
+                                log.error("Failed to send audio chunk %d/%d", idx, total_audio_chunks)
+                                break
+
+                            if idx < total_audio_chunks:
+                                play_duration_s = len(wav_bytes) / (SR * 2)
+                                send_elapsed_s = time.time() - send_started
+                                wait_s = max(0.0, play_duration_s - send_elapsed_s - 0.20)
+                                if wait_s > 0:
+                                    time.sleep(wait_s)
                     else:
                         log.error("Agent generated empty response")
 

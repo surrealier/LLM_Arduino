@@ -452,12 +452,15 @@ void protocol_audio_process() {
     used_now -= 1;
   }
 
-  if (!M5.Speaker.isPlaying() && used_now >= 2) {
+  if (used_now >= 2) {
     static uint8_t play_buffer[2048];
     static uint32_t last_playraw_fail_ms = 0;
-    size_t chunk_size = audio_ring_pop(play_buffer, sizeof(play_buffer));
-    chunk_size = (chunk_size / 2) * 2;
-    if (chunk_size >= 2) {
+    int queue_attempts = 0;
+    while (audio_ring_used() >= 2 && queue_attempts < 2) {
+      size_t chunk_size = audio_ring_pop(play_buffer, sizeof(play_buffer));
+      chunk_size = (chunk_size / 2) * 2;
+      if (chunk_size < 2) break;
+
       bool queued = M5.Speaker.playRaw((const int16_t*)play_buffer, chunk_size / 2, 16000, false, 1, 0);
       if (!queued) {
         // 큐 가득 참 → 데이터 되돌리고 다음 사이클에 재시도
@@ -467,7 +470,9 @@ void protocol_audio_process() {
           Serial.println("[AUDIO_PROC] playRaw queue full; retry next cycle");
           last_playraw_fail_ms = now;
         }
+        break;
       }
+      queue_attempts++;
     }
   }
 

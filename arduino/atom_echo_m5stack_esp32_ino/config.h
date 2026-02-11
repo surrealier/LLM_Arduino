@@ -63,7 +63,7 @@ extern const uint16_t SERVER_PORT; // TCP 포트 (기본 5001)
 #define AUDIO_SAMPLE_RATE 16000
 #define AUDIO_FRAME_SIZE 320
 #define PREROLL_MS 200
-#define AUDIO_RING_BUFFER_SIZE 32768
+#define AUDIO_RING_BUFFER_SIZE 81920
 #define ENABLE_BUTTON_INTERRUPT 1
 
 // ────────────────────────────────────────────
@@ -129,7 +129,7 @@ extern const uint16_t SERVER_PORT; // TCP 포트 (기본 5001)
 #define AUDIO_SAMPLE_RATE 16000
 #define AUDIO_FRAME_SIZE 320
 #define PREROLL_MS 200
-#define AUDIO_RING_BUFFER_SIZE 32768
+#define AUDIO_RING_BUFFER_SIZE 81920
 #define ENABLE_BUTTON_INTERRUPT 1
 
 // ============================================

@@ -3,13 +3,19 @@ Whisper 기반 음성 인식(STT) 엔진 모듈
 - faster-whisper를 사용한 한국어 음성 인식
 - GPU/CPU 자동 폴백 및 스레드 안전 처리
 """
+
 import logging
+import os
+import sys
 import threading
+from pathlib import Path
+
 import numpy as np
 from faster_whisper import WhisperModel
 
 
 log = logging.getLogger(__name__)
+_CUDA_DLL_PATHS_ADDED = False
 
 
 class STTEngine:
@@ -38,16 +44,71 @@ class STTEngine:
         - GPU 사용 시 float16, CPU 사용 시 int8 정밀도 사용
         """
         log.info("Loading STT model: %s on %s...", self.model_size, device)
-        m = WhisperModel(
+        model = WhisperModel(
             self.model_size,
             device=device,
             compute_type=("int8" if device == "cpu" else "float16"),
             cpu_threads=1,
             num_workers=1,
         )
-        self.model = m
+        self.model = model
         self.device_in_use = device
         log.info("STT model loaded on %s", device)
+
+    @staticmethod
+    def _ensure_cuda_runtime_paths():
+        global _CUDA_DLL_PATHS_ADDED
+        if _CUDA_DLL_PATHS_ADDED or os.name != "nt":
+            return
+
+        prefixes = []
+        conda_prefix = os.environ.get("CONDA_PREFIX")
+        if conda_prefix:
+            prefixes.append(Path(conda_prefix))
+
+        try:
+            prefixes.append(Path(sys.executable).resolve().parent.parent)
+        except Exception:
+            pass
+
+        seen = set()
+        for prefix in prefixes:
+            for rel in (
+                Path("Lib/site-packages/nvidia/cublas/bin"),
+                Path("Lib/site-packages/nvidia/cudnn/bin"),
+            ):
+                dll_dir = (prefix / rel).resolve()
+                if not dll_dir.exists():
+                    continue
+                key = str(dll_dir).lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+
+                try:
+                    os.add_dll_directory(str(dll_dir))
+                except Exception:
+                    pass
+                if str(dll_dir) not in os.environ.get("PATH", ""):
+                    os.environ["PATH"] = f"{dll_dir};{os.environ.get('PATH', '')}"
+
+        _CUDA_DLL_PATHS_ADDED = True
+
+    @staticmethod
+    def _is_cuda_runtime_error(msg: str) -> bool:
+        lowered = msg.lower()
+        signatures = (
+            "cublas",
+            "cudnn",
+            "cuda",
+            "cudart",
+            "curand",
+            "cufft",
+            "cusparse",
+            "dll is not found",
+            "cannot be loaded",
+        )
+        return any(sig in lowered for sig in signatures)
 
     def ensure_model(self):
         """
@@ -101,9 +162,13 @@ class STTEngine:
                 return _run()
             except RuntimeError as exc:
                 msg = str(exc)
-                # CUDA 런타임 오류 감지 및 CPU 폴백
-                if "cublas64_12.dll" in msg or "cublas" in msg:
-                    log.error("CUDA runtime missing/broken -> switching to CPU now.")
+                if self.device_in_use == "cuda" and self._is_cuda_runtime_error(msg):
+                    log.error("CUDA runtime missing/broken -> switching to CPU now. reason=%s", msg)
+                    if "cublas64_12.dll" in msg:
+                        log.error(
+                            "Detected CUDA 12 runtime mismatch. "
+                            "Install CUDA 12 cublas/cudnn runtime for ctranslate2>=4."
+                        )
                     self.load_model("cpu")
                     return _run()
                 raise

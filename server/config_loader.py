@@ -26,13 +26,14 @@ class Config:
             "port": 5001
         },
         "stt": {
-            "model_size": "small",
+            "model_size": "medium",
             "device": "cuda",
             "language": "ko"
         },
         "llm": {
             "base_url": "http://localhost:11434",
             "model": "qwen2.5:0.5b",
+            "think": False,
             "auto_start": True,
             "start_command": "ollama serve",
             "startup_timeout": 10.0

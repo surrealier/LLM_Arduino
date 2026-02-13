@@ -12,7 +12,9 @@ cd LLM_Arduino/server
 pip install -r requirements.txt
 
 # GPU 사용자 (권장)
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+# faster-whisper(ctranslate2>=4) CUDA runtime
+pip install nvidia-cublas-cu12 nvidia-cudnn-cu12
 ```
 
 ### 2단계: 서버 실행 (1분)

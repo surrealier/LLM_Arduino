@@ -7,7 +7,7 @@ server:
 
 # STT (Speech-to-Text) Settings
 stt:
-  model_size: "small"  # tiny, base, small, medium, large
+  model_size: "medium"  # tiny, base, small, medium, large
   device: "cuda"       # cuda or cpu
   language: "ko"
 
@@ -15,6 +15,7 @@ stt:
 llm:
   base_url: "http://localhost:11434"
   model: "qwen3:8b"
+  think: false  # true/false: Ollama thinking default
 
 # TTS (Text-to-Speech) Settings
 tts:

@@ -21,6 +21,7 @@ from config_loader import get_config
 from src.agent_mode import AgentMode
 from src.audio_processor import normalize_to_dbfs, qc, save_wav, trim_energy
 from src.connection_manager import ConnectionManager
+from src.input_gate import InputGate
 from src.job_queue import JobQueue
 from src.llm_client import LLMClient
 from src.logging_setup import get_performance_logger, setup_logging
@@ -152,6 +153,7 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
     state = {"sid": 0, "current_angle": 90}
     state_lock = threading.Lock()
     stop_event = threading.Event()
+    input_gate = InputGate()
 
     def worker():
         global current_mode
@@ -228,7 +230,7 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
 
                 def _handle_mode_switch(new_mode):
                     """모드 전환 공통 처리"""
-                    nonlocal current_mode
+                    global current_mode
                     if new_mode not in ("robot", "agent") or new_mode == current_mode:
                         return
                     old_mode = current_mode
@@ -355,11 +357,16 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
             except Exception as exc:
                 log.exception("Worker error processing sid=%s: %s", sid, exc)
                 perf_logger.log_error()
+            finally:
+                # 한 턴 처리가 끝나면 다음 음성 입력 허용
+                input_gate.mark_idle()
 
     worker_thread = threading.Thread(target=worker, daemon=True)
     worker_thread.start()
 
     audio_buf = bytearray()
+    active_sid = None
+    max_audio_bytes = int(config.get("audio", "max_seconds", default=12) * SR * 2)
     last_status_log = time.time()
 
     while True:
@@ -390,35 +397,70 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
 
             # 음성 스트림 시작 처리
             if ptype == PTYPE_START:
+                accepted = input_gate.start_stream()
+                audio_buf = bytearray()
+
+                if not accepted:
+                    active_sid = None
+                    log.debug("START ignored: processing in progress")
+                    continue
+
                 with state_lock:
                     state["sid"] += 1
-                    sid = state["sid"]
-                audio_buf = bytearray()
-                log.info("START (sid=%s)", sid)
+                    active_sid = state["sid"]
+                log.info("START (sid=%s)", active_sid)
 
             # 음성 데이터 수집
             elif ptype == PTYPE_AUDIO:
+                if not input_gate.has_active_stream():
+                    log.debug("AUDIO ignored: no active stream")
+                    continue
+
+                if not input_gate.can_accept_audio():
+                    continue
+
                 audio_buf.extend(payload)
-                if len(audio_buf) > int(config.get("audio", "max_seconds", default=12) * SR * 2):
+                if len(audio_buf) > max_audio_bytes:
                     log.warning("Buffer too large -> force END")
                     ptype = PTYPE_END
 
             # 음성 스트림 종료 및 STT 큐에 추가
             if ptype == PTYPE_END:
-                with state_lock:
-                    sid = state["sid"]
+                end_decision = input_gate.end_stream()
+                if end_decision == InputGate.DECISION_IGNORE:
+                    log.debug("END ignored: no active stream")
+                    audio_buf = bytearray()
+                    active_sid = None
+                    continue
+
+                if end_decision == InputGate.DECISION_DROP:
+                    log.debug("Dropped voice stream while processing previous turn")
+                    audio_buf = bytearray()
+                    active_sid = None
+                    continue
+
+                sid = active_sid
+                if sid is None:
+                    with state_lock:
+                        sid = state["sid"]
                 data = bytes(audio_buf)
                 sec = len(data) / 2 / SR
                 log.info("END (sid=%s) bytes=%s sec=%.2f", sid, len(data), sec)
 
-                job_queue.put(job_queue.stt_queue, (sid, data), drop_oldest=True)
+                input_gate.mark_busy()
+                queued = job_queue.put(job_queue.stt_queue, (sid, data), drop_oldest=True)
+                if not queued:
+                    log.warning("Failed to enqueue sid=%s; input gate released", sid)
+                    input_gate.mark_idle()
                 audio_buf = bytearray()
+                active_sid = None
 
             if time.time() - last_status_log >= 10:
                 last_status_log = time.time()
                 log.info(
-                    "Status: mode=%s stt_queue=%s model_loaded=%s",
+                    "Status: mode=%s busy=%s stt_queue=%s model_loaded=%s",
                     current_mode,
+                    input_gate.is_busy(),
                     job_queue.stt_queue.qsize(),
                     stt_engine.model is not None,
                 )

@@ -142,6 +142,7 @@ class MemoryManager:
             [{"role": "system", "content": "너는 대화 요약 도우미다. 지시대로만 출력하라."},
              {"role": "user", "content": prompt}],
             temperature=0.3, max_tokens=300,
+            think=False,
         )
         if result.strip():
             header = "# Shortterm Memory — 단기 기억\n\n"
@@ -159,6 +160,7 @@ class MemoryManager:
             [{"role": "system", "content": "너는 정보 추출 도우미다. 지시된 형식으로만 출력하라."},
              {"role": "user", "content": prompt}],
             temperature=0.2, max_tokens=500,
+            think=False,
         )
         if not result.strip():
             return

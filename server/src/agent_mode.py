@@ -162,6 +162,100 @@ class AgentMode:
         cleaned = self._sanitize_response(text)
         return self.split_text_for_tts(cleaned, max_chunks=max_chunks)
 
+    @staticmethod
+    def merge_audio_chunks(audio_chunks: list[bytes], sr: int = 16000, crossfade_ms: float = 12.0) -> bytes:
+        """
+        여러 PCM16LE 청크를 하나의 오디오로 결합.
+        청크 경계 클릭 노이즈를 줄이기 위해 짧은 crossfade를 적용한다.
+        """
+        valid_chunks = [chunk for chunk in audio_chunks if chunk]
+        if not valid_chunks:
+            return b""
+        if len(valid_chunks) == 1:
+            return valid_chunks[0]
+
+        import numpy as np
+
+        arrays = []
+        for chunk in valid_chunks:
+            if len(chunk) < 2:
+                continue
+            arrays.append(np.frombuffer(chunk, dtype="<i2").astype(np.float32))
+        if not arrays:
+            return b""
+
+        fade_len = max(0, int(sr * max(0.0, float(crossfade_ms)) / 1000.0))
+        merged = arrays[0]
+        for nxt in arrays[1:]:
+            if merged.size == 0:
+                merged = nxt
+                continue
+            n = min(fade_len, merged.size, nxt.size)
+            if n > 0:
+                fade_out = np.linspace(1.0, 0.0, n, dtype=np.float32)
+                fade_in = 1.0 - fade_out
+                overlap = merged[-n:] * fade_out + nxt[:n] * fade_in
+                merged = np.concatenate((merged[:-n], overlap, nxt[n:]))
+            else:
+                merged = np.concatenate((merged, nxt))
+
+        pcm16 = np.clip(merged, -32768.0, 32767.0).astype("<i2")
+        return pcm16.tobytes()
+
+    @staticmethod
+    def crossfade_audio_boundaries(
+        audio_chunks: list[bytes],
+        sr: int = 16000,
+        crossfade_ms: float = 12.0,
+    ) -> list[bytes]:
+        """
+        청크 단위 전송을 유지하면서 경계만 crossfade 처리한다.
+        반환값은 동일한 순서의 PCM16LE 청크 리스트다.
+        """
+        valid_chunks = [chunk for chunk in audio_chunks if chunk]
+        if len(valid_chunks) <= 1:
+            return valid_chunks
+
+        import numpy as np
+
+        arrays = []
+        for chunk in valid_chunks:
+            if len(chunk) < 2:
+                arrays.append(np.zeros(0, dtype=np.float32))
+                continue
+            arrays.append(np.frombuffer(chunk, dtype="<i2").astype(np.float32))
+
+        n = max(0, int(sr * max(0.0, float(crossfade_ms)) / 1000.0))
+        if n <= 0:
+            return valid_chunks
+
+        out_arrays = []
+        prev = arrays[0]
+        for nxt in arrays[1:]:
+            if prev.size == 0:
+                out_arrays.append(prev)
+                prev = nxt
+                continue
+            overlap = min(n, prev.size, nxt.size)
+            if overlap > 0:
+                fade_out = np.linspace(1.0, 0.0, overlap, dtype=np.float32)
+                fade_in = 1.0 - fade_out
+                mixed = prev[-overlap:] * fade_out + nxt[:overlap] * fade_in
+                prev = np.concatenate((prev[:-overlap], mixed))
+                nxt = nxt[overlap:]
+            out_arrays.append(prev)
+            prev = nxt
+        out_arrays.append(prev)
+
+        result = []
+        for arr in out_arrays:
+            if arr.size == 0:
+                result.append(b"")
+                continue
+            pcm16 = np.clip(arr, -32768.0, 32767.0).astype("<i2")
+            result.append(pcm16.tobytes())
+        return result
+
     def _get_system_prompt(self) -> str:
         """시스템 프롬프트 생성 - MemoryManager가 md 파일에서 조립"""
         return self.memory.build_system_prompt()
@@ -246,9 +340,11 @@ class AgentMode:
 
     def text_to_audio(self, text: str, trim_pad_ms: float = 140.0):
         """텍스트를 오디오로 변환 - TTS 생성 및 오디오 후처리"""
+        tmp_mp3 = None
         try:
             import os
             import importlib
+            import tempfile
 
             missing = []
             for mod in ("numpy", "librosa", "soundfile", "edge_tts"):
@@ -274,7 +370,8 @@ class AgentMode:
                 log.warning(
                     "audio_processor not found; skipping trim/normalize/qc post-processing"
                 )
-            tmp_mp3 = "temp_tts.mp3"
+            with tempfile.NamedTemporaryFile(prefix="tts_", suffix=".mp3", delete=False) as tf:
+                tmp_mp3 = tf.name
 
             log.info("Generating TTS for: %s", text[:50])
 
@@ -358,3 +455,9 @@ class AgentMode:
         except Exception as exc:
             log.error("TTS failed: %s", exc, exc_info=True)
             return b""
+        finally:
+            if tmp_mp3:
+                try:
+                    Path(tmp_mp3).unlink(missing_ok=True)
+                except Exception:
+                    pass

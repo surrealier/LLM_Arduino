@@ -50,7 +50,7 @@ class RobotMode:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"정제: {text}"},
         ]
-        refined = self.llm.chat(messages, temperature=0.1, max_tokens=64)
+        refined = self.llm.chat(messages, temperature=0.1, max_tokens=64, think=False)
         if len(refined) > len(text) * 3 or len(refined) < 1:
             return text
         return refined
@@ -88,7 +88,7 @@ class RobotMode:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"명령: {text}"},
         ]
-        response = self.llm.chat(messages, temperature=0.1, max_tokens=128)
+        response = self.llm.chat(messages, temperature=0.1, max_tokens=128, think=False)
 
         match = re.search(r"\{[^}]+\}", response)
         if match:

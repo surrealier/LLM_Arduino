@@ -59,7 +59,10 @@ def send_packet(
     payload: Optional[bytes] = b"",
     lock=None,
     audio_chunk: int = 4096,
-    audio_sleep_s: float = 0.050,
+    audio_sleep_s: float = 0.0,
+    audio_sample_rate: int = 16000,
+    audio_bytes_per_sample: int = 2,
+    audio_max_ahead_s: float = 0.35,
 ) -> bool:
     """
     안정적인 패킷 전송 함수
@@ -81,6 +84,9 @@ def send_packet(
 
             # 오디오 출력 데이터의 경우 특별 처리
             if ptype == PTYPE_AUDIO_OUT:
+                bytes_per_second = max(1.0, float(audio_sample_rate * audio_bytes_per_sample))
+                send_t0 = time.perf_counter()
+                sent_audio_bytes = 0
                 while offset < total:
                     remaining = total - offset
                     if remaining < 2:  # 16비트 샘플 최소 크기 체크
@@ -93,9 +99,16 @@ def send_packet(
                     header = struct.pack("<BH", ptype & 0xFF, len(chunk))
                     conn.sendall(header + chunk)
                     offset += chunk_size
-                    # 오디오 스트리밍을 위한 지연
+                    sent_audio_bytes += chunk_size
+
+                    # 재생 속도 기준 pacing: 송신이 재생보다 과도하게 앞서가지 않도록 제한
                     if offset < total:
-                        time.sleep(audio_sleep_s)
+                        elapsed = time.perf_counter() - send_t0
+                        sent_audio_s = sent_audio_bytes / bytes_per_second
+                        ahead_s = sent_audio_s - elapsed
+                        sleep_s = max(float(audio_sleep_s), ahead_s - float(audio_max_ahead_s))
+                        if sleep_s > 0:
+                            time.sleep(sleep_s)
             else:
                 # 일반 데이터의 경우 청크 단위로 전송
                 while offset < total:
@@ -137,7 +150,10 @@ def send_audio(
     pcm_bytes: bytes,
     lock=None,
     audio_chunk: int = 4096,
-    audio_sleep_s: float = 0.050,
+    audio_sleep_s: float = 0.0,
+    audio_sample_rate: int = 16000,
+    audio_bytes_per_sample: int = 2,
+    audio_max_ahead_s: float = 0.35,
 ) -> bool:
     """
     ESP32에 오디오 데이터 전송
@@ -151,6 +167,9 @@ def send_audio(
         lock=lock,
         audio_chunk=audio_chunk,
         audio_sleep_s=audio_sleep_s,
+        audio_sample_rate=audio_sample_rate,
+        audio_bytes_per_sample=audio_bytes_per_sample,
+        audio_max_ahead_s=audio_max_ahead_s,
     )
     if ok:
         log.info("AUDIO to ESP32: %s bytes", len(pcm_bytes))

@@ -2,3 +2,8 @@ wav_logs/
 *.wav
 
 *.pyc
+memory/**/
+context*.json
+app_*.log
+error_*.log
+.codex

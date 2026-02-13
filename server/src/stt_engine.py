@@ -8,6 +8,7 @@ import logging
 import os
 import sys
 import threading
+import ctypes
 from pathlib import Path
 
 import numpy as np
@@ -43,6 +44,10 @@ class STTEngine:
         Whisper 모델을 지정된 디바이스에 로드
         - GPU 사용 시 float16, CPU 사용 시 int8 정밀도 사용
         """
+        if str(device).startswith("cuda"):
+            self._ensure_cuda_runtime_paths()
+            self._preload_cuda_runtime()
+
         log.info("Loading STT model: %s on %s...", self.model_size, device)
         model = WhisperModel(
             self.model_size,
@@ -66,16 +71,36 @@ class STTEngine:
         if conda_prefix:
             prefixes.append(Path(conda_prefix))
 
+        venv_prefix = os.environ.get("VIRTUAL_ENV")
+        if venv_prefix:
+            prefixes.append(Path(venv_prefix))
+
         try:
-            prefixes.append(Path(sys.executable).resolve().parent.parent)
+            exe_parent = Path(sys.executable).resolve().parent
+            # conda env: <env>/python.exe
+            if (exe_parent / "Lib").exists():
+                prefixes.append(exe_parent)
+            # venv on Windows: <env>/Scripts/python.exe
+            if (exe_parent.parent / "Lib").exists():
+                prefixes.append(exe_parent.parent)
+            # fallback (기존 동작 유지)
+            prefixes.append(exe_parent.parent)
         except Exception:
             pass
 
+        cuda_env = os.environ.get("CUDA_PATH") or os.environ.get("CUDA_HOME")
+        if cuda_env:
+            prefixes.append(Path(cuda_env))
+
         seen = set()
+        added = []
         for prefix in prefixes:
             for rel in (
                 Path("Lib/site-packages/nvidia/cublas/bin"),
                 Path("Lib/site-packages/nvidia/cudnn/bin"),
+                Path("Lib/site-packages/nvidia/cuda_runtime/bin"),
+                Path("Library/bin"),
+                Path("bin"),
             ):
                 dll_dir = (prefix / rel).resolve()
                 if not dll_dir.exists():
@@ -91,8 +116,59 @@ class STTEngine:
                     pass
                 if str(dll_dir) not in os.environ.get("PATH", ""):
                     os.environ["PATH"] = f"{dll_dir};{os.environ.get('PATH', '')}"
+                added.append(str(dll_dir))
 
         _CUDA_DLL_PATHS_ADDED = True
+        if added:
+            log.info("Registered CUDA runtime paths: %s", " | ".join(added))
+        else:
+            log.warning(
+                "No CUDA runtime directories detected in environment prefixes: %s",
+                ", ".join(str(p) for p in prefixes) or "(none)",
+            )
+
+    @staticmethod
+    def _preload_cuda_runtime():
+        """
+        Windows에서 ctranslate2가 의존하는 CUDA DLL을 미리 로드해
+        PATH/검색 경로 문제가 있으면 조기에 명확하게 로그를 남긴다.
+        """
+        if os.name != "nt":
+            return
+
+        required = ("cublas64_12.dll",)
+        cudnn_candidates = (
+            "cudnn64_9.dll",
+            "cudnn_ops64_9.dll",
+            "cudnn_cnn64_9.dll",
+            "cudnn64_8.dll",
+        )
+
+        missing = []
+        for dll in required:
+            try:
+                ctypes.WinDLL(dll)
+            except OSError:
+                missing.append(dll)
+
+        cudnn_loaded = False
+        for dll in cudnn_candidates:
+            try:
+                ctypes.WinDLL(dll)
+                cudnn_loaded = True
+                break
+            except OSError:
+                continue
+        if not cudnn_loaded:
+            missing.append("cudnn64_9.dll")
+
+        if missing:
+            log.error(
+                "Missing CUDA runtime DLLs on PATH: %s (VIRTUAL_ENV=%s, CONDA_PREFIX=%s)",
+                ", ".join(missing),
+                os.environ.get("VIRTUAL_ENV"),
+                os.environ.get("CONDA_PREFIX"),
+            )
 
     @staticmethod
     def _is_cuda_runtime_error(msg: str) -> bool:
@@ -162,7 +238,7 @@ class STTEngine:
                 return _run()
             except RuntimeError as exc:
                 msg = str(exc)
-                if self.device_in_use == "cuda" and self._is_cuda_runtime_error(msg):
+                if str(self.device_in_use).startswith("cuda") and self._is_cuda_runtime_error(msg):
                     log.error("CUDA runtime missing/broken -> switching to CPU now. reason=%s", msg)
                     if "cublas64_12.dll" in msg:
                         log.error(

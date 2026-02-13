@@ -301,7 +301,7 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
                             log.info("TTS text split into %d chunks", len(tts_text_chunks))
 
                         tts_start = time.time()
-                        audio_chunks = []
+                        audio_payloads = []
                         total_chunks = len(tts_text_chunks)
                         for idx, tts_text in enumerate(tts_text_chunks, start=1):
                             trim_pad_ms = 140.0
@@ -315,7 +315,7 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
                                 trim_pad_ms=trim_pad_ms,
                             )
                             if wav_bytes:
-                                audio_chunks.append((tts_text, wav_bytes))
+                                audio_payloads.append(wav_bytes)
                             else:
                                 log.error(
                                     "TTS chunk failed (%d/%d): %s",
@@ -325,32 +325,38 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
                                 )
                         perf_logger.log_tts(time.time() - tts_start)
 
-                        if not audio_chunks:
+                        if not audio_payloads:
                             log.error("All TTS chunks failed")
                             continue
 
-                        total_audio_chunks = len(audio_chunks)
-                        for idx, (_, wav_bytes) in enumerate(audio_chunks, start=1):
+                        audio_payloads = agent_handler.crossfade_audio_boundaries(
+                            audio_payloads,
+                            sr=SR,
+                            crossfade_ms=12.0,
+                        )
+                        audio_payloads = [chunk for chunk in audio_payloads if chunk]
+                        if not audio_payloads:
+                            log.error("Crossfaded TTS audio is empty")
+                            continue
+
+                        if len(audio_payloads) > 1:
+                            log.info(
+                                "Prepared %d TTS chunks with boundary crossfade",
+                                len(audio_payloads),
+                            )
+
+                        total_audio_chunks = len(audio_payloads)
+                        for idx, chunk_bytes in enumerate(audio_payloads, start=1):
                             log.info(
                                 "Sending audio chunk %d/%d: %d bytes",
                                 idx,
                                 total_audio_chunks,
-                                len(wav_bytes),
+                                len(chunk_bytes),
                             )
-                            send_started = time.time()
-                            success = send_audio(conn, wav_bytes, send_lock)
+                            success = send_audio(conn, chunk_bytes, send_lock)
                             if not success:
                                 log.error("Failed to send audio chunk %d/%d", idx, total_audio_chunks)
                                 break
-
-                            if idx < total_audio_chunks:
-                                play_duration_s = len(wav_bytes) / (SR * 2)
-                                send_elapsed_s = time.time() - send_started
-                                # 다음 청크를 너무 일찍 보내면 겹침/왜곡이 생길 수 있어
-                                # 선행 여유를 너무 작게 잡으면 청크 경계에서 공백이 생길 수 있다.
-                                wait_s = max(0.0, play_duration_s - send_elapsed_s - 0.15)
-                                if wait_s > 0:
-                                    time.sleep(wait_s)
                     else:
                         log.error("Agent generated empty response")
 
@@ -509,8 +515,14 @@ def main():
     llm_client = LLMClient(
         base_url=llm_config.get("base_url", "http://localhost:11434"),
         model=llm_config.get("model", "qwen2.5:0.5b"),
+        default_think=llm_config.get("think", False),
     )
-    log.info("LLM Client: %s (%s)", llm_client.base_url, llm_client.model)
+    log.info(
+        "LLM Client: %s (%s, default_think=%s)",
+        llm_client.base_url,
+        llm_client.model,
+        llm_client.default_think,
+    )
 
     # 모드별 핸들러 초기화
     robot_handler = RobotMode(ACTIONS_CONFIG, llm_client)

@@ -23,10 +23,15 @@ tts:
 
 # Pet/Assistant Settings
 assistant:
-  name: "아이"              # Assistant name (default)
-  personality: "cheerful"   # cheerful, calm, playful, serious
+  name: "콜리"              # Assistant name (브로콜리에서 따옴)
+  personality: "witty"      # JARVIS-style witty home agent
   proactive: true           # Enable proactive interactions
   proactive_interval: 600   # Seconds between proactive messages (10 min)
+
+# Memory System
+memory:
+  refresh_interval: 5       # Refresh memory every N conversations
+  memory_dir: "memory"      # Directory for md memory files
 
 # Weather Service (OpenWeatherMap)
 weather:

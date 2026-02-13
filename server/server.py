@@ -468,8 +468,8 @@ def main():
 
     log.info(
         "Assistant: %s (%s)",
-        assistant_config.get("name", "아이"),
-        assistant_config.get("personality", "cheerful"),
+        assistant_config.get("name", "콜리"),
+        assistant_config.get("personality", "witty"),
     )
 
     stt_engine = STTEngine(model_size=model_size, device=device, language=language)

@@ -1,4 +1,4 @@
-﻿"""
+"""
 에이전트 모드 처리 모듈
 - 가정용 AI 어시스턴트 기능 제공
 - 대화 기록 관리 및 컨텍스트 유지
@@ -16,6 +16,7 @@ from emotion_system import EmotionSystem
 from info_services import InfoServices
 from proactive_interaction import ProactiveInteraction
 from scheduler import Scheduler
+from src.memory_manager import MemoryManager
 
 log = logging.getLogger(__name__)
 
@@ -52,12 +53,13 @@ class AgentMode:
         self.llm = llm_client
         self.tts_voice = tts_voice or "ko-KR-SunHiNeural"
 
-        # 대화 기록 및 메모리 관리
+        # 대화 기록
         self.conversation_history = []
-        self.important_memories = []
         self.max_history = 20
-        self.context_backup_interval = 10
         self.conversation_count = 0
+
+        # 메모리 매니저 (md 파일 기반)
+        self.memory = MemoryManager(llm_client)
 
         # 서브시스템 초기화
         self.emotion_system = EmotionSystem()
@@ -65,43 +67,16 @@ class AgentMode:
         self.proactive = ProactiveInteraction(proactive_enabled, proactive_interval)
         self.scheduler = Scheduler()
 
-        # 컨텍스트 백업 디렉토리 설정
-        self.backup_dir = Path("context_backup")
-        self.backup_dir.mkdir(exist_ok=True)
-
-        self._restore_context()
-
-    def _get_personality_traits(self, personality: str) -> str:
-        """성격 특성 정의 - 설정된 성격에 따른 응답 스타일 결정"""
-        traits = {
-            "cheerful": "밝고 친절하지만 비서처럼 실용적으로 안내합니다.",
-            "calm": "차분하고 안정적이며 신중하게 핵심을 정리해 안내합니다.",
-            "playful": "유쾌한 어조를 유지하되 답변은 명확하고 업무적으로 전달합니다.",
-            "serious": "진지하고 전문적이며 효율적으로 정확한 정보를 제공합니다.",
-        }
-        return traits.get(personality, traits["cheerful"])
-
-    @staticmethod
-    def _get_assistant_settings():
-        """현재 어시스턴트 이름/성격 설정 반환"""
-        from config_loader import get_config
-
-        assistant_config = get_config().get_assistant_config()
-        assistant_name = assistant_config.get("name", "아이")
-        personality = assistant_config.get("personality", "cheerful")
-        return assistant_name, personality
-
     def _sanitize_response(self, text: str) -> str:
         """LLM 응답 후처리: 자기소개/이모지 제거 + 공백 정리"""
         cleaned = " ".join((text or "").split()).strip()
         if not cleaned:
             return ""
 
-        assistant_name, _ = self._get_assistant_settings()
-        escaped_name = re.escape(assistant_name)
+        # 콜리 자기소개 패턴 제거
         intro_patterns = [
-            rf"^(안녕하세요[!,. ]*)?(저는|전|제가)?\s*{escaped_name}\s*(입니다|이에요|예요)?[!,. ]*",
-            rf"^(제 이름은|내 이름은)\s*{escaped_name}\s*(입니다|이에요|예요)?[!,. ]*",
+            r"^(안녕하세요[!,. ]*)?(저는|전|제가)?\s*콜리\s*(입니다|이에요|예요)?[!,. ]*",
+            r"^(제 이름은|내 이름은)\s*콜리\s*(입니다|이에요|예요)?[!,. ]*",
         ]
         for pattern in intro_patterns:
             cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE).strip()
@@ -187,48 +162,8 @@ class AgentMode:
         return self.split_text_for_tts(cleaned, max_chunks=max_chunks)
 
     def _get_system_prompt(self) -> str:
-        """시스템 프롬프트 생성 - AI 어시스턴트 역할 및 성격 정의"""
-        assistant_name, personality = self._get_assistant_settings()
-        personality_trait = self._get_personality_traits(personality)
-
-        # 중요한 기억 정보 추가
-        memories_text = ""
-        if self.important_memories:
-            memories_text = "\n\n중요한 기억:\n" + "\n".join(
-                f"- {mem}" for mem in self.important_memories[-10:]
-            )
-
-        return (
-            f"당신은 가정용 AI 홈 어시스턴트입니다. 내부 식별 이름은 '{assistant_name}'입니다.\n\n"
-            f"성격: {personality_trait}\n\n"
-            "핵심 역할:\n"
-            "1. 가족 구성원과 자연스럽고 친근하게 대화하되, 비서처럼 실용적으로 답변\n"
-            "2. 일상적인 질문에 대한 도움 제공\n"
-            "3. 간단한 정보 검색 및 안내\n"
-            "4. 가족의 일정, 선호사항, 중요한 정보 기억\n"
-            "5. 따뜻하고 공감적인 응답\n\n"
-            "중요 원칙:\n"
-            "- 대화 내용을 절대 잊어서는 안 됩니다\n"
-            "- 사용자가 이전에 말한 내용을 기억하고 참조하세요\n"
-            "- 가족 구성원 각자의 특성과 선호를 기억하세요\n"
-            "- 중요한 날짜, 약속, 선호사항은 반드시 기억하세요\n"
-            "- 이전 대화의 맥락을 이어가세요\n\n"
-            "응답 스타일:\n"
-            "- 한국어로 자연스럽게 대화\n"
-            "- 2-3문장 이내로 간결하게 답변\n"
-            "- 성격에 맞는 어조 유지\n"
-            "- 요청 처리에 바로 들어가고 자기소개 문구를 반복하지 않기\n"
-            f"- \"{assistant_name}입니다\" 같은 자기소개 문장을 생성하지 않기\n"
-            "- 이모지/이모티콘/특수 감정 문자를 절대 사용하지 않기\n"
-            "- 필요시 이전 대화 내용 언급\n"
-            "- 불확실한 정보는 솔직히 모른다고 말하기\n"
-            "- 문장은 TTS에 자연스럽게 읽히도록 짧은 절/문장 단위로 구성\n\n"
-            "현재 기능:\n"
-            "- 음성 대화 (STT/TTS)\n"
-            "- 서보 모터 제어 (로봇 모드 전환 시)\n"
-            "- 정보 제공 및 대화\n"
-            f"{memories_text}"
-        )
+        """시스템 프롬프트 생성 - MemoryManager가 md 파일에서 조립"""
+        return self.memory.build_system_prompt()
 
     def generate_response(self, text: str, is_proactive: bool = False) -> str:
         """응답 생성 - 사용자 입력에 대한 AI 어시스턴트 응답 생성"""
@@ -285,7 +220,7 @@ class AgentMode:
             response = self.llm.chat(messages, temperature=0.8, max_tokens=256)
             response = self._sanitize_response(response)
             if not response:
-                response = "무엇을 도와드릴까요?"
+                response = "음, 잘 못 알아들었어요. 다시 한번 말씀해주시겠어요?"
 
             # 응답 감정 분석 및 대화 기록 추가
             response_emotion = self.emotion_system.analyze_emotion(response)
@@ -298,85 +233,15 @@ class AgentMode:
                 }
             )
 
-            # 대화 카운트 증가 및 주기적 백업
+            # 대화 카운트 증가 및 메모리 자동 갱신
             self.conversation_count += 1
-            if self.conversation_count % self.context_backup_interval == 0:
-                self._backup_context()
+            self.memory.after_turn(self.conversation_history)
 
-            # 중요 정보 추출 및 저장
-            self._extract_important_info(text, response)
             log.info("Agent Response: %s", response)
             return response
         except Exception as exc:
             log.error("LLM generation failed: %s", exc)
             return "죄송해요, 오류가 발생했어요."
-
-    def _extract_important_info(self, user_text: str, assistant_response: str):
-        """중요 정보 추출 - 대화에서 기억해야 할 정보 식별 및 저장"""
-        important_keywords = [
-            "이름",
-            "생일",
-            "좋아",
-            "싫어",
-            "알레르기",
-            "약속",
-            "일정",
-            "가족",
-            "친구",
-            "전화번호",
-            "주소",
-            "기억",
-            "잊지마",
-        ]
-
-        combined_text = user_text + " " + assistant_response
-        for keyword in important_keywords:
-            if keyword in combined_text:
-                memory_entry = f"[{datetime.now().strftime('%Y-%m-%d')}] {user_text[:50]}"
-                if memory_entry not in self.important_memories:
-                    self.important_memories.append(memory_entry)
-                    log.info("Important memory saved: %s", memory_entry)
-                break
-
-        # 메모리 크기 제한
-        if len(self.important_memories) > 50:
-            self.important_memories = self.important_memories[-50:]
-
-    def _backup_context(self):
-        """컨텍스트 백업 - 대화 기록 및 중요 정보를 파일로 저장"""
-        try:
-            backup_data = {
-                "timestamp": datetime.now().isoformat(),
-                "conversation_count": self.conversation_count,
-                "conversation_history": self.conversation_history[-self.max_history :],
-                "important_memories": self.important_memories,
-            }
-            filename = self.backup_dir / f"context_{int(time.time())}.json"
-            import json
-
-            with open(filename, "w", encoding="utf-8") as f:
-                json.dump(backup_data, f, ensure_ascii=False, indent=2)
-            log.info("Context backed up to %s", filename)
-        except Exception as exc:
-            log.error("Context backup failed: %s", exc)
-
-    def _restore_context(self):
-        """컨텍스트 복원 - 이전 대화 기록 및 중요 정보 로드"""
-        try:
-            files = sorted(self.backup_dir.glob("context_*.json"))
-            if not files:
-                return
-            latest_file = files[-1]
-            import json
-
-            with open(latest_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                self.conversation_history = data.get("conversation_history", [])
-                self.important_memories = data.get("important_memories", [])
-                self.conversation_count = data.get("conversation_count", 0)
-            log.info("Restored context from %s", latest_file)
-        except Exception as exc:
-            log.error("Context restore failed: %s", exc)
 
     def _check_sleep_commands(self, text: str):
         """수면 명령 확인 - 사용자의 수면/휴식 요청 처리"""

@@ -21,10 +21,10 @@ tts:
   voice: "ko-KR-SunHiNeural"  # Microsoft Edge TTS voice
   # Other options: ko-KR-InJoonNeural (male)
 
-# Pet/Assistant Settings
+# Assistant Settings (콜리)
 assistant:
-  name: "아이"              # Assistant name (default)
-  personality: "cheerful"   # cheerful, calm, playful, serious
+  name: "콜리"              # 브로콜리에서 따온 이름
+  personality: "witty"      # witty (자비스 스타일)
   proactive: true           # Enable proactive interactions
   proactive_interval: 600   # Seconds between proactive messages (10 min)
 
@@ -33,11 +33,12 @@ weather:
   api_key: ""               # Get free key from openweathermap.org
   location: "Seoul"         # City name
 
-# Context Management
-context:
-  max_history: 20           # Number of conversations to keep
-  backup_interval: 10       # Backup every N conversations
-  auto_save: true
+# Memory System (.md 파일 기반)
+memory:
+  refresh_interval: 300     # 자동 refresh 주기 (초, 5분)
+  refresh_after_turns: 5    # N턴마다 메모리 refresh
+  idle_threshold: 120       # idle 감지 기준 (초, 2분)
+  max_history: 20           # LLM context window 대화 수
 
 # Emotion System
 emotion:

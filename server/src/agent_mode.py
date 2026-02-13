@@ -17,6 +17,7 @@ from info_services import InfoServices
 from proactive_interaction import ProactiveInteraction
 from scheduler import Scheduler
 from src.memory_manager import MemoryManager
+from src.intent_parser import parse_intent
 
 log = logging.getLogger(__name__)
 
@@ -165,21 +166,14 @@ class AgentMode:
         """시스템 프롬프트 생성 - MemoryManager가 md 파일에서 조립"""
         return self.memory.build_system_prompt()
 
-    def generate_response(self, text: str, is_proactive: bool = False) -> str:
-        """응답 생성 - 사용자 입력에 대한 AI 어시스턴트 응답 생성"""
+    def generate_response(self, text: str, is_proactive: bool = False) -> tuple[str, str]:
+        """응답 생성. Returns (response_text, intent)."""
         if not self.llm:
-            return "모델이 로드되지 않았습니다."
+            return "모델이 로드되지 않았습니다.", "none"
 
         try:
-            # 능동적 상호작용 업데이트 (일반 대화인 경우)
             if not is_proactive:
                 self.proactive.update_interaction()
-
-            # 수면 명령 확인 및 처리
-            if not is_proactive:
-                sleep_response = self._check_sleep_commands(text)
-                if sleep_response:
-                    return sleep_response
 
             # 정보 서비스 요청 처리 (날씨, 뉴스 등) → LLM 컨텍스트로 주입
             info_context = None
@@ -190,15 +184,12 @@ class AgentMode:
                     info_context = json.dumps(info_data, ensure_ascii=False)
                     log.info("Info data for LLM context: %s", info_context)
 
-                # 스케줄 관련 요청 처리
                 schedule_response = self.scheduler.process_schedule_request(text)
                 if schedule_response:
                     info_context = schedule_response if isinstance(schedule_response, str) else str(schedule_response)
 
-            # 감정 분석
             detected_emotion = self.emotion_system.analyze_emotion(text)
 
-            # 대화 기록에 사용자 입력 추가
             self.conversation_history.append(
                 {
                     "role": "user",
@@ -208,21 +199,25 @@ class AgentMode:
                 }
             )
 
-            # LLM 응답 생성을 위한 메시지 구성
+            # LLM 응답 생성
             system_prompt = self._get_system_prompt()
             if info_context:
                 system_prompt += f"\n\n[참고 데이터]\n{info_context}\n위 데이터를 바탕으로 자연스럽게 답변하세요."
             messages = [{"role": "system", "content": system_prompt}]
-            for conv in self.conversation_history[-self.max_history :]:
+            for conv in self.conversation_history[-self.max_history:]:
                 messages.append({"role": conv["role"], "content": conv["content"]})
 
-            # LLM 추론 실행
-            response = self.llm.chat(messages, temperature=0.8, max_tokens=256)
-            response = self._sanitize_response(response)
+            raw = self.llm.chat(messages, temperature=0.8, max_tokens=256)
+            intent, clean_text = parse_intent(raw)
+            response = self._sanitize_response(clean_text)
             if not response:
                 response = "음, 잘 못 알아들었어요. 다시 한번 말씀해주시겠어요?"
 
-            # 응답 감정 분석 및 대화 기록 추가
+            # sleep 의도 처리
+            if intent == "sleep":
+                self.proactive.sleep_mode = True
+                self.proactive.sleep_until = datetime.now().replace(hour=8, minute=0, second=0, microsecond=0)
+
             response_emotion = self.emotion_system.analyze_emotion(response)
             self.conversation_history.append(
                 {
@@ -233,24 +228,14 @@ class AgentMode:
                 }
             )
 
-            # 대화 카운트 증가 및 메모리 자동 갱신
             self.conversation_count += 1
             self.memory.after_turn(self.conversation_history)
 
-            log.info("Agent Response: %s", response)
-            return response
+            log.info("Agent Response (intent=%s): %s", intent, response)
+            return response, intent
         except Exception as exc:
             log.error("LLM generation failed: %s", exc)
-            return "죄송해요, 오류가 발생했어요."
-
-    def _check_sleep_commands(self, text: str):
-        """수면 명령 확인 - 사용자의 수면/휴식 요청 처리"""
-        sleep_keywords = ["자러", "잘게", "잘게요", "잘게요", "그만", "쉬자"]
-        if any(keyword in text for keyword in sleep_keywords):
-            self.proactive.sleep_mode = True
-            self.proactive.sleep_until = datetime.now().replace(hour=8, minute=0, second=0, microsecond=0)
-            return "알겠어요. 쉬는 동안 조용히 있을게요."
-        return None
+            return "죄송해요, 오류가 발생했어요.", "none"
 
     async def _tts_gen(self, text, output_file):
         """TTS 생성 - Edge TTS를 사용한 음성 합성"""

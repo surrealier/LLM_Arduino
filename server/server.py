@@ -224,27 +224,31 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
                 with state_lock:
                     cur = state["current_angle"]
 
-                sys_action, meaningful, _ = robot_handler.process_text(text, cur)
+                # ── 모드별 LLM 처리 (intent/action 기반 모드 전환 포함) ──
 
-                if meaningful and sys_action.get("action") == "SWITCH_MODE":
-                    new_mode = sys_action.get("mode")
-                    if new_mode in ["robot", "agent"]:
-                        old_mode = current_mode
-                        current_mode = new_mode
-                        log.info("=" * 50)
-                        log.info("모드 변경: %s -> %s", old_mode.upper(), current_mode.upper())
-                        log.info("=" * 50)
-
-                        notify_text = f"{new_mode} 모드로 변경되었습니다."
-                        if current_mode == "agent":
-                            wav_bytes = agent_handler.text_to_audio(notify_text)
-                            if wav_bytes:
-                                send_audio(conn, wav_bytes, send_lock)
-                        else:
-                            send_action(conn, {"action": "WIGGLE", "sid": sid}, send_lock)
-                    continue
+                def _handle_mode_switch(new_mode):
+                    """모드 전환 공통 처리"""
+                    nonlocal current_mode
+                    if new_mode not in ("robot", "agent") or new_mode == current_mode:
+                        return
+                    old_mode = current_mode
+                    current_mode = new_mode
+                    log.info("=" * 50)
+                    log.info("모드 변경: %s -> %s", old_mode.upper(), current_mode.upper())
+                    log.info("=" * 50)
+                    notify_text = f"{new_mode} 모드로 변경되었습니다."
+                    if current_mode == "agent":
+                        wav_bytes = agent_handler.text_to_audio(notify_text)
+                        if wav_bytes:
+                            send_audio(conn, wav_bytes, send_lock)
+                    else:
+                        send_action(conn, {"action": "WIGGLE", "sid": sid}, send_lock)
 
                 if current_mode == "robot":
+                    if not text:
+                        send_action(conn, {"action": "NOOP", "sid": sid, "meaningful": False, "recognized": False}, send_lock)
+                        continue
+
                     llm_start = time.time()
                     refined_text, robot_action = robot_handler.process_with_llm(text, cur)
                     perf_logger.log_llm(time.time() - llm_start)
@@ -252,12 +256,17 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
                     if refined_text != text:
                         log.info("LLM Refined: %s -> %s", text, refined_text)
 
+                    # LLM이 모드 전환을 판단한 경우
+                    if robot_action.get("action") == "SWITCH_MODE":
+                        _handle_mode_switch(robot_action.get("mode"))
+                        continue
+
                     action = robot_action
                     action["sid"] = sid
-                    action["meaningful"] = meaningful
+                    action["meaningful"] = action.get("action") != "NOOP"
                     action["recognized"] = bool(text)
 
-                    if meaningful and "angle" in action:
+                    if action["meaningful"] and "angle" in action:
                         with state_lock:
                             state["current_angle"] = action["angle"]
 
@@ -270,8 +279,15 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
                     log.info("Agent Mode: Processing text: %s", text)
 
                     llm_start = time.time()
-                    response = agent_handler.generate_response(text)
+                    response, intent = agent_handler.generate_response(text)
                     perf_logger.log_llm(time.time() - llm_start)
+
+                    # intent 기반 모드 전환
+                    if intent == "mode_robot":
+                        _handle_mode_switch("robot")
+                        continue
+                    if intent == "mode_agent":
+                        pass  # 이미 agent 모드
 
                     if response:
                         log.info("Agent Response: %s", response)

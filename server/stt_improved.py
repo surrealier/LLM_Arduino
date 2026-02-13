@@ -404,42 +404,36 @@ def handle_connection(conn, addr):
                 with state_lock:
                     cur = state["current_angle"]
 
-                # Mode Switch Check
-                sys_action, meaningful, _ = robot_handler.process_text(text, cur)
-                
-                if meaningful and sys_action.get("action") == "SWITCH_MODE":
-                    new_mode = sys_action.get("mode")
-                    if new_mode in ["robot", "agent"]:
-                        current_mode = new_mode
-                        log.info(f"🔄 Mode Switched to: {current_mode}")
-                        
-                        notify_text = f"{new_mode} 모드로 변경되었습니다."
-                        if current_mode == "agent" and connection_active.is_set():
-                            wav_bytes = agent_handler.text_to_audio(notify_text)
-                            if wav_bytes:
-                                send_audio(conn, wav_bytes, send_lock)
-                        elif connection_active.is_set():
-                            action = {"action": "WIGGLE", "sid": sid}
-                            send_action(conn, action, send_lock)
-                    continue
-
-                # Mode-specific Processing
+                # ── 모드별 처리 (모드 전환도 LLM이 판단) ──
                 if current_mode == "robot":
-                    # LLM으로 STT 정제 및 명령 결정
                     llm_start = time.time()
                     refined_text, robot_action = robot_handler.process_with_llm(text, cur)
-                    llm_duration = time.time() - llm_start
-                    perf_logger.log_llm(llm_duration)
-                    
+                    perf_logger.log_llm(time.time() - llm_start)
+
                     if refined_text != text:
                         log.info(f"🔧 LLM Refined: {text} -> {refined_text}")
-                    
+
+                    # 모드 전환 감지
+                    if robot_action.get("action") == "SWITCH_MODE":
+                        new_mode = robot_action.get("mode", "agent")
+                        if new_mode in ["robot", "agent"]:
+                            current_mode = new_mode
+                            log.info(f"🔄 Mode Switched to: {current_mode}")
+                            notify_text = f"{new_mode} 모드로 변경했어."
+                            if current_mode == "agent" and connection_active.is_set():
+                                wav_bytes = agent_handler.text_to_audio(notify_text)
+                                if wav_bytes:
+                                    send_audio(conn, wav_bytes, send_lock)
+                            elif connection_active.is_set():
+                                send_action(conn, {"action": "WIGGLE", "sid": sid}, send_lock)
+                        continue
+
                     action = robot_action
                     action["sid"] = sid
-                    action["meaningful"] = meaningful
+                    action["meaningful"] = action.get("action") != "NOOP"
                     action["recognized"] = bool(text)
 
-                    if meaningful and "angle" in action:
+                    if action["meaningful"] and "angle" in action:
                         with state_lock:
                             state["current_angle"] = action["angle"]
 
@@ -447,19 +441,24 @@ def handle_connection(conn, addr):
                         send_action(conn, action, send_lock)
 
                 elif current_mode == "agent":
-                    if not text: 
+                    if not text:
                         continue
-                    
+
                     llm_start = time.time()
-                    response = agent_handler.generate_response(text)
-                    llm_duration = time.time() - llm_start
-                    perf_logger.log_llm(llm_duration)
-                    
+                    response, cmd = agent_handler.generate_response(text)
+                    perf_logger.log_llm(time.time() - llm_start)
+
+                    # 모드 전환 감지
+                    if cmd and cmd.get("action") == "SWITCH_MODE":
+                        new_mode = cmd.get("mode", "robot")
+                        if new_mode in ["robot", "agent"]:
+                            current_mode = new_mode
+                            log.info(f"🔄 Mode Switched to: {current_mode}")
+
                     if response and connection_active.is_set():
                         tts_start = time.time()
                         wav_bytes = agent_handler.text_to_audio(response)
-                        tts_duration = time.time() - tts_start
-                        perf_logger.log_tts(tts_duration)
+                        perf_logger.log_tts(time.time() - tts_start)
                         if wav_bytes and connection_active.is_set():
                             send_audio(conn, wav_bytes, send_lock)
                         else:

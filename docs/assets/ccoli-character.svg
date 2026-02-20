@@ -1,67 +1,53 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 960" role="img" aria-labelledby="title desc">
-  <title id="title">ccoli mascot character</title>
-  <desc id="desc">Cartoon broccoli robot that combines STT TTS and LLM modules.</desc>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="ccoli character (lime bg)">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#f2fff0"/>
-      <stop offset="100%" stop-color="#d7f4ff"/>
-    </linearGradient>
-    <linearGradient id="leaf" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#63d66f"/>
-      <stop offset="100%" stop-color="#2c9f49"/>
-    </linearGradient>
-    <linearGradient id="stem" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#9be2b2"/>
-      <stop offset="100%" stop-color="#58ae7e"/>
-    </linearGradient>
-    <linearGradient id="robot" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#2f445a"/>
-      <stop offset="100%" stop-color="#172633"/>
-    </linearGradient>
+    <style>
+      .od { stroke:#1B5E20; stroke-linecap:round; stroke-linejoin:round; }
+    </style>
   </defs>
 
-  <rect x="0" y="0" width="960" height="960" fill="url(#bg)"/>
-  <circle cx="480" cy="480" r="380" fill="#ffffff" opacity="0.55"/>
+  <rect x="0" y="0" width="512" height="512" fill="#DDF7C9"/>
 
-  <g transform="translate(220 125)">
-    <circle cx="260" cy="110" r="78" fill="url(#leaf)"/>
-    <circle cx="184" cy="144" r="90" fill="url(#leaf)"/>
-    <circle cx="260" cy="176" r="108" fill="url(#leaf)"/>
-    <circle cx="338" cy="144" r="90" fill="url(#leaf)"/>
-    <rect x="198" y="198" width="124" height="138" rx="44" fill="url(#stem)"/>
-
-    <rect x="142" y="300" width="236" height="300" rx="60" fill="url(#robot)"/>
-    <rect x="176" y="336" width="168" height="100" rx="20" fill="#f2fff9"/>
-    <circle cx="220" cy="386" r="16" fill="#203747"/>
-    <circle cx="300" cy="386" r="16" fill="#203747"/>
-    <rect x="214" y="422" width="92" height="12" rx="6" fill="#66f0b8"/>
-
-    <rect x="180" y="472" width="160" height="104" rx="16" fill="#f2fff7" opacity="0.97"/>
-    <rect x="194" y="490" width="132" height="20" rx="10" fill="#7de5b8"/>
-    <rect x="194" y="520" width="132" height="20" rx="10" fill="#6cd5ff"/>
-    <rect x="194" y="550" width="132" height="20" rx="10" fill="#8eb1ff"/>
-    <text x="260" y="505" text-anchor="middle" fill="#184039" font-size="16" font-weight="700" font-family="Segoe UI, Arial, sans-serif">STT</text>
-    <text x="260" y="535" text-anchor="middle" fill="#114463" font-size="16" font-weight="700" font-family="Segoe UI, Arial, sans-serif">TTS</text>
-    <text x="260" y="565" text-anchor="middle" fill="#2e3569" font-size="16" font-weight="700" font-family="Segoe UI, Arial, sans-serif">LLM</text>
-
-    <rect x="252" y="282" width="16" height="24" rx="8" fill="#203647"/>
-    <circle cx="260" cy="274" r="12" fill="#4af59d"/>
+  <!-- Broccoli head (slightly bigger + chibi) -->
+  <g class="od" stroke-width="10">
+    <circle cx="182" cy="156" r="58" fill="#7EDC8B"/>
+    <circle cx="256" cy="120" r="82" fill="#4CAF50"/>
+    <circle cx="330" cy="156" r="58" fill="#7EDC8B"/>
+    <circle cx="256" cy="60" r="18" fill="#7EDC8B"/>
+    <!-- tiny leaf notch -->
+    <path d="M238 104 C246 90 266 90 274 104" fill="none" stroke="#1B5E20" stroke-width="8" stroke-opacity=".25"/>
   </g>
 
-  <g font-family="Segoe UI, Arial, sans-serif" font-weight="700">
-    <rect x="88" y="248" width="150" height="62" rx="20" fill="#7ae6b5"/>
-    <text x="163" y="287" text-anchor="middle" fill="#15523b" font-size="30">STT</text>
-    <line x1="238" y1="278" x2="316" y2="325" stroke="#1d7b58" stroke-width="5" stroke-linecap="round"/>
+  <!-- Stem -->
+  <path d="M198 278 C198 230 228 212 256 212 C284 212 314 230 314 278 L314 316
+           C314 350 292 372 256 372 C220 372 198 350 198 316 Z"
+        fill="#2E7D32" class="od" stroke-width="10"/>
 
-    <rect x="726" y="248" width="150" height="62" rx="20" fill="#79d8ff"/>
-    <text x="801" y="287" text-anchor="middle" fill="#0f4b6b" font-size="30">TTS</text>
-    <line x1="726" y1="278" x2="646" y2="325" stroke="#1b6285" stroke-width="5" stroke-linecap="round"/>
-
-    <rect x="390" y="782" width="182" height="66" rx="22" fill="#9faeff"/>
-    <text x="481" y="824" text-anchor="middle" fill="#2c316d" font-size="32">LLM</text>
-    <line x1="481" y1="782" x2="481" y2="728" stroke="#4b56a8" stroke-width="5" stroke-linecap="round"/>
+  <!-- Robot body -->
+  <g class="od" stroke-width="10">
+    <rect x="132" y="304" rx="56" ry="56" width="248" height="190" fill="#F8FFFB"/>
+    <!-- Screen -->
+    <rect x="184" y="346" rx="28" ry="28" width="144" height="112" fill="#0B2330"/>
+    <!-- feet -->
+    <path d="M194 494 C194 466 220 462 238 472" fill="none"/>
+    <path d="M318 494 C318 466 292 462 274 472" fill="none"/>
   </g>
 
-  <text x="480" y="88" text-anchor="middle" fill="#1e3f2d" font-size="56" font-weight="800" font-family="Segoe UI, Arial, sans-serif">ccoli</text>
-  <text x="480" y="132" text-anchor="middle" fill="#2c6f53" font-size="24" font-weight="600" font-family="Segoe UI, Arial, sans-serif">Broccoli x Robot x STT/TTS/LLM</text>
+  <!-- Face -->
+  <circle cx="232" cy="402" r="12" fill="#27D4E2"/>
+  <circle cx="280" cy="402" r="12" fill="#27D4E2"/>
+  <circle cx="208" cy="414" r="10" fill="#FF8FB3" opacity=".85"/>
+  <circle cx="304" cy="414" r="10" fill="#FF8FB3" opacity=".85"/>
+  <path d="M228 430 C244 446 268 446 284 430" fill="none" stroke="#FFD54D" stroke-width="10" stroke-linecap="round"/>
+
+  <!-- Arms -->
+  <path d="M132 372 C104 388 100 414 112 434 C124 454 132 458 132 458"
+        fill="none" stroke="#2E7D32" stroke-width="14" stroke-linecap="round"/>
+  <path d="M380 372 C408 388 412 414 400 434 C388 454 380 458 380 458"
+        fill="none" stroke="#2E7D32" stroke-width="14" stroke-linecap="round"/>
+
+  <!-- Headset mic -->
+  <path d="M314 220 C360 230 392 266 398 310" fill="none" stroke="#00838F" stroke-width="12" stroke-linecap="round"/>
+  <path d="M402 324 C406 340 418 350 434 350" fill="none" stroke="#00838F" stroke-width="12" stroke-linecap="round"/>
+  <circle cx="446" cy="350" r="10" fill="#00838F" class="od" stroke-width="8"/>
 </svg>

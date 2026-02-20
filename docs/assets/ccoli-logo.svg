@@ -1,44 +1,38 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
-  <title id="title">ccoli official logo</title>
-  <desc id="desc">Broccoli robot icon with ccoli wordmark and STT TTS LLM tagline.</desc>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320" role="img" aria-label="ccoli logo (lime bg)">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#effbea"/>
-      <stop offset="100%" stop-color="#d9f6ea"/>
-    </linearGradient>
-    <linearGradient id="leaf" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#57c665"/>
-      <stop offset="100%" stop-color="#2d8f46"/>
-    </linearGradient>
-    <linearGradient id="stem" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#8ed3a4"/>
-      <stop offset="100%" stop-color="#56a678"/>
-    </linearGradient>
-    <linearGradient id="robot" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#2f4358"/>
-      <stop offset="100%" stop-color="#162431"/>
-    </linearGradient>
+    <style>
+      text { font-family: ui-rounded, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", Arial, sans-serif; }
+      .od { stroke:#1B5E20; stroke-linecap:round; stroke-linejoin:round; }
+    </style>
   </defs>
 
-  <rect x="8" y="8" width="1184" height="344" rx="36" fill="url(#bg)" stroke="#9cd6b2" stroke-width="2"/>
+  <rect x="0" y="0" width="1200" height="320" fill="#DDF7C9"/>
 
-  <g transform="translate(60 55)">
-    <circle cx="120" cy="75" r="42" fill="url(#leaf)"/>
-    <circle cx="70" cy="100" r="48" fill="url(#leaf)"/>
-    <circle cx="120" cy="118" r="56" fill="url(#leaf)"/>
-    <circle cx="172" cy="100" r="48" fill="url(#leaf)"/>
-    <rect x="82" y="130" width="76" height="86" rx="26" fill="url(#stem)"/>
+  <g transform="translate(48,44)">
+    <g class="od" stroke-width="10">
+      <circle cx="128" cy="106" r="54" fill="#7EDC8B"/>
+      <circle cx="200" cy="84" r="72" fill="#4CAF50"/>
+      <circle cx="272" cy="106" r="54" fill="#7EDC8B"/>
+      <path d="M158 250 C158 276 176 290 200 290 C224 290 242 276 242 250 L242 170 C242 152 228 138 210 138 L190 138 C172 138 158 152 158 170 Z"
+            fill="#2E7D32"/>
+      <path d="M182 78 C192 62 216 54 236 62" fill="none" stroke="#1B5E20" stroke-width="8" stroke-opacity=".25"/>
+    </g>
 
-    <rect x="68" y="184" width="108" height="102" rx="28" fill="url(#robot)"/>
-    <rect x="86" y="204" width="72" height="40" rx="12" fill="#f0fff7" opacity="0.96"/>
-    <circle cx="106" cy="224" r="8" fill="#173042"/>
-    <circle cx="138" cy="224" r="8" fill="#173042"/>
-    <rect x="102" y="246" width="40" height="7" rx="4" fill="#6be4b1"/>
-    <circle cx="122" cy="176" r="7" fill="#4ce58f"/>
-    <rect x="118" y="156" width="8" height="22" rx="4" fill="#243748"/>
+    <g class="od" stroke-width="10">
+      <path d="M282 188 C282 156 308 132 340 132 L374 132 C406 132 432 156 432 188 L432 204 C432 236 406 260 374 260
+               L356 260 L334 284 L334 260 L340 260 C308 260 282 236 282 204 Z"
+            fill="#F8FFFB"/>
+      <path d="M356 160 L356 216" fill="none"/>
+      <path d="M340 176 C340 166 348 158 358 158 C368 158 376 166 376 176 L376 202 C376 212 368 220 358 220 C348 220 340 212 340 202 Z"
+            fill="#00838F"/>
+      <path d="M262 138 C280 120 280 92 262 74" fill="none" stroke="#00838F" stroke-width="10"/>
+      <path d="M238 150 C260 126 260 98 238 74" fill="none" stroke="#00838F" stroke-width="10" stroke-opacity=".85"/>
+    </g>
   </g>
 
-  <text x="360" y="175" fill="#163526" font-size="132" font-weight="800" font-family="Segoe UI, Arial, sans-serif">ccoli</text>
-  <text x="364" y="236" fill="#2b7152" font-size="34" font-weight="600" font-family="Segoe UI, Arial, sans-serif">Voice Agent Platform</text>
-  <text x="364" y="282" fill="#3b8b66" font-size="28" font-weight="600" font-family="Consolas, Menlo, monospace">STT + TTS + LLM</text>
+  <g transform="translate(500,92)">
+    <text x="0" y="156" font-size="176" font-weight="950" fill="#1B5E20" letter-spacing="-3">ccoli</text>
+    <text x="0" y="224" font-size="52" font-weight="900" fill="#2E7D32">TTS agent + servo robot</text>
+  </g>
 </svg>

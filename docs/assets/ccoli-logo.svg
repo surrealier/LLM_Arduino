@@ -1,38 +1,80 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320" role="img" aria-label="ccoli logo (lime bg)">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320" role="img" aria-label="ccoli logo v9">
   <defs>
     <style>
       text { font-family: ui-rounded, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", Arial, sans-serif; }
       .od { stroke:#1B5E20; stroke-linecap:round; stroke-linejoin:round; }
     </style>
+
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E7FFD4"/>
+      <stop offset="1" stop-color="#CBEFB3"/>
+    </linearGradient>
+    <radialGradient id="bgLight" cx="26%" cy="18%" r="78%">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity=".60"/>
+      <stop offset=".55" stop-color="#FFFFFF" stop-opacity=".14"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+
+    <filter id="shadow" x="-25%" y="-25%" width="160%" height="190%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#0A2A10" flood-opacity=".18"/>
+    </filter>
+    <filter id="groundBlur" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="10"/>
+    </filter>
   </defs>
 
-  <rect x="0" y="0" width="1200" height="320" fill="#DDF7C9"/>
+  <rect x="0" y="0" width="1200" height="320" fill="url(#bgGrad)"/>
+  <rect x="0" y="0" width="1200" height="320" fill="url(#bgLight)"/>
+  <rect x="10" y="10" width="1180" height="300" rx="22" ry="22" fill="none" stroke="#0A2A10" stroke-opacity=".08" stroke-width="6"/>
 
-  <g transform="translate(48,44)">
-    <g class="od" stroke-width="10">
-      <circle cx="128" cy="106" r="54" fill="#7EDC8B"/>
-      <circle cx="200" cy="84" r="72" fill="#4CAF50"/>
-      <circle cx="272" cy="106" r="54" fill="#7EDC8B"/>
-      <path d="M158 250 C158 276 176 290 200 290 C224 290 242 276 242 250 L242 170 C242 152 228 138 210 138 L190 138 C172 138 158 152 158 170 Z"
-            fill="#2E7D32"/>
-      <path d="M182 78 C192 62 216 54 236 62" fill="none" stroke="#1B5E20" stroke-width="8" stroke-opacity=".25"/>
-    </g>
-
-    <g class="od" stroke-width="10">
-      <path d="M282 188 C282 156 308 132 340 132 L374 132 C406 132 432 156 432 188 L432 204 C432 236 406 260 374 260
-               L356 260 L334 284 L334 260 L340 260 C308 260 282 236 282 204 Z"
-            fill="#F8FFFB"/>
-      <path d="M356 160 L356 216" fill="none"/>
-      <path d="M340 176 C340 166 348 158 358 158 C368 158 376 166 376 176 L376 202 C376 212 368 220 358 220 C348 220 340 212 340 202 Z"
-            fill="#00838F"/>
-      <path d="M262 138 C280 120 280 92 262 74" fill="none" stroke="#00838F" stroke-width="10"/>
-      <path d="M238 150 C260 126 260 98 238 74" fill="none" stroke="#00838F" stroke-width="10" stroke-opacity=".85"/>
-    </g>
+  <g opacity=".14">
+    <path d="M980 78 C1060 36 1120 36 1180 78" fill="none" stroke="#00838F" stroke-width="10" stroke-linecap="round"/>
+    <path d="M960 128 C1046 82 1110 82 1186 128" fill="none" stroke="#00838F" stroke-width="10" stroke-linecap="round"/>
+    <path d="M990 188 C1068 148 1130 148 1188 188" fill="none" stroke="#00838F" stroke-width="10" stroke-linecap="round"/>
   </g>
 
-  <g transform="translate(500,92)">
-    <text x="0" y="156" font-size="176" font-weight="950" fill="#1B5E20" letter-spacing="-3">ccoli</text>
-    <text x="0" y="224" font-size="52" font-weight="900" fill="#2E7D32">TTS agent + servo robot</text>
+  <ellipse cx="245" cy="284" rx="160" ry="24" fill="#0A2A10" opacity=".16" filter="url(#groundBlur)"/>
+
+  <g transform="translate(22,-22) scale(0.68)" filter="url(#shadow)">
+    <g class="od" stroke-width="10">
+      <circle cx="182" cy="156" r="58" fill="#7EDC8B"/>
+      <circle cx="256" cy="120" r="82" fill="#4CAF50"/>
+      <circle cx="330" cy="156" r="58" fill="#7EDC8B"/>
+      <circle cx="256" cy="60" r="18" fill="#7EDC8B"/>
+      <path d="M238 104 C246 90 266 90 274 104" fill="none" stroke="#1B5E20" stroke-width="8" stroke-opacity=".25"/>
+    </g>
+
+    <path d="M198 278 C198 230 228 212 256 212 C284 212 314 230 314 278 L314 316
+             C314 350 292 372 256 372 C220 372 198 350 198 316 Z"
+          fill="#2E7D32" class="od" stroke-width="10"/>
+
+    <g class="od" stroke-width="10">
+      <rect x="132" y="304" rx="56" ry="56" width="248" height="190" fill="#F8FFFB"/>
+      <rect x="184" y="346" rx="28" ry="28" width="144" height="112" fill="#0B2330"/>
+      <path d="M194 494 C194 466 220 462 238 472" fill="none"/>
+      <path d="M318 494 C318 466 292 462 274 472" fill="none"/>
+    </g>
+
+    <circle cx="232" cy="402" r="12" fill="#27D4E2"/>
+    <circle cx="280" cy="402" r="12" fill="#27D4E2"/>
+    <circle cx="208" cy="414" r="10" fill="#FF8FB3" opacity=".85"/>
+    <circle cx="304" cy="414" r="10" fill="#FF8FB3" opacity=".85"/>
+    <path d="M228 430 C244 446 268 446 284 430" fill="none" stroke="#FFD54D" stroke-width="10" stroke-linecap="round"/>
+
+    <path d="M132 372 C104 388 100 414 112 434 C124 454 132 458 132 458"
+          fill="none" stroke="#2E7D32" stroke-width="14" stroke-linecap="round"/>
+    <path d="M380 372 C408 388 412 414 400 434 C388 454 380 458 380 458"
+          fill="none" stroke="#2E7D32" stroke-width="14" stroke-linecap="round"/>
+
+    <path d="M314 220 C360 230 392 266 398 310" fill="none" stroke="#00838F" stroke-width="12" stroke-linecap="round"/>
+    <path d="M402 324 C406 340 418 350 434 350" fill="none" stroke="#00838F" stroke-width="12" stroke-linecap="round"/>
+    <circle cx="446" cy="350" r="10" fill="#00838F" class="od" stroke-width="8"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <text x="770" y="198" font-size="204" font-weight="950" fill="#1B5E20" letter-spacing="-3" text-anchor="middle">ccoli</text>
+    <text x="770" y="260" font-size="46" font-weight="950" fill="#2E7D32" text-anchor="middle">STT + LLM</text>
+    <text x="770" y="298" font-size="38" font-weight="950" fill="#2E7D32" text-anchor="middle">-&gt; TTS Agent + Servo/Display Robot</text>
   </g>
 </svg>

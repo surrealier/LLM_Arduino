@@ -539,7 +539,7 @@ def main():
 
     log.info(
         "Assistant: %s (%s)",
-        assistant_config.get("name", "\ucf5c\ub9ac"),
+        assistant_config.get("name", "ccoli"),
         assistant_config.get("personality", "witty"),
     )
 

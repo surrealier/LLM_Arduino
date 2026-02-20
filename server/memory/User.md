@@ -1,21 +1,14 @@
-# User — 사용자 프로필
+# User Memory Template
 
-## 기본 정보
-- 이름: (아직 모름)
-- 나이: (아직 모름)
-- 성별: (아직 모름)
+## Basic Info
+- name: unknown
+- age: unknown
+- location: unknown
 
-## 직업/학업
-- (아직 모름)
+## Preferences
+- communication_style: concise
+- language: ko
 
-## 취미/관심사
-- (아직 모름)
-
-## 거주지/고향
-- (아직 모름)
-
-## 선호/습관
-- (아직 모름)
-
-## 기타
-- (아직 모름)
+## Notes
+- This file is intentionally generic for open-source distribution.
+- Runtime deployments should store private user data outside git.

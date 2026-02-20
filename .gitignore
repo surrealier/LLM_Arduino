@@ -6,6 +6,7 @@ __pycache__/
 .venv/
 server/.pytest_cache/
 server/context_backup/
+server/memory/
 server/logs/
 server/**/__pycache__/
 context*.json

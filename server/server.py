@@ -1,8 +1,8 @@
 """
-ESP32 음성 스트리밍 서버 메인 모듈
-- ESP32로부터 음성 데이터를 수신하여 STT 처리
-- 로봇 모드와 에이전트 모드 지원
-- TCP 소켓 통신으로 명령/음성 응답 전송
+Main ESP32 voice streaming server module
+- Receives voice data from ESP32 and performs STT
+- Supports robot mode and agent mode
+- Sends commands and voice responses over TCP socket communication
 """
 import os
 import signal
@@ -43,14 +43,15 @@ os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
-# 오디오 처리 상수
+
+# Audio processing constants
 SR = 16000
 UNSURE_POLICY = "NOOP"
 
 ACTIONS_CONFIG = []
-current_mode = "agent"  # 디폴트 모드: agent
+current_mode = "agent"  # Default mode: agent
 
-# 모드별 핸들러 인스턴스
+# Mode handler instances
 robot_handler = None
 agent_handler = None
 
@@ -181,7 +182,7 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
                         send_action(conn, action, send_lock)
                     continue
 
-                # 음성 데이터를 PCM으로 변환 및 품질 검사
+                # Convert voice data to PCM and run quality checks
                 pcm = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
                 rms_db, peak, clip = qc(pcm)
                 log.debug("QC sid=%s rms=%.1fdBFS peak=%.3f clip=%.2f%%", sid, rms_db, peak, clip)
@@ -200,13 +201,13 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
                 pcm = trim_energy(pcm, SR)
                 pcm = normalize_to_dbfs(pcm, target_dbfs=-22.0)
 
-                # 녹음 파일 저장 비활성화
+                # Recording file saving disabled
                 # ts = time.strftime("%Y%m%d_%H%M%S")
                 # wav_path = f"wav_logs/sid{sid}_{ts}_{len(pcm)/SR:.2f}s.wav"
                 # save_wav(wav_path, pcm, SR)
                 # log.info("Saved wav: %s", wav_path)
 
-                # STT 처리 및 텍스트 정리
+                # STT processing and text cleanup
                 text = ""
                 try:
                     stt_start = time.time()
@@ -226,19 +227,19 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
                 with state_lock:
                     cur = state["current_angle"]
 
-                # ── 모드별 LLM 처리 (intent/action 기반 모드 전환 포함) ──
+                # Mode-specific LLM processing (including intent/action-based mode switching)
 
                 def _handle_mode_switch(new_mode):
-                    """모드 전환 공통 처리"""
+                    """Common mode switching handler"""
                     global current_mode
                     if new_mode not in ("robot", "agent") or new_mode == current_mode:
                         return
                     old_mode = current_mode
                     current_mode = new_mode
                     log.info("=" * 50)
-                    log.info("모드 변경: %s -> %s", old_mode.upper(), current_mode.upper())
+                    log.info("\ubaa8\ub4dc \ubcc0\uacbd: %s -> %s", old_mode.upper(), current_mode.upper())
                     log.info("=" * 50)
-                    notify_text = f"{new_mode} 모드로 변경되었습니다."
+                    notify_text = f"{new_mode} \ubaa8\ub4dc\ub85c \ubcc0\uacbd\ub418\uc5c8\uc2b5\ub2c8\ub2e4."
                     if current_mode == "agent":
                         wav_bytes = agent_handler.text_to_audio(notify_text)
                         if wav_bytes:
@@ -258,7 +259,7 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
                     if refined_text != text:
                         log.info("LLM Refined: %s -> %s", text, refined_text)
 
-                    # LLM이 모드 전환을 판단한 경우
+                    # If the LLM decides to switch modes
                     if robot_action.get("action") == "SWITCH_MODE":
                         _handle_mode_switch(robot_action.get("mode"))
                         continue
@@ -284,12 +285,12 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
                     response, intent = agent_handler.generate_response(text)
                     perf_logger.log_llm(time.time() - llm_start)
 
-                    # intent 기반 모드 전환
+                    # Intent-based mode switching
                     if intent == "mode_robot":
                         _handle_mode_switch("robot")
                         continue
                     if intent == "mode_agent":
-                        pass  # 이미 agent 모드
+                        pass  # Already in agent mode
 
                     if response:
                         log.info("Agent Response: %s", response)
@@ -364,7 +365,7 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
                 log.exception("Worker error processing sid=%s: %s", sid, exc)
                 perf_logger.log_error()
             finally:
-                # 한 턴 처리가 끝나면 다음 음성 입력 허용
+                # Allow next voice input after one turn is processed
                 input_gate.mark_idle()
 
     worker_thread = threading.Thread(target=worker, daemon=True)
@@ -396,12 +397,12 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
                     log.info("Disconnect (payload)")
                     break
 
-            # 프로토콜 타입별 처리
+            # Handle protocol packet types
             if ptype == PTYPE_PING:
                 send_pong(conn, send_lock)
                 continue
 
-            # 음성 스트림 시작 처리
+            # Handle voice stream start
             if ptype == PTYPE_START:
                 accepted = input_gate.start_stream()
                 audio_buf = bytearray()
@@ -416,7 +417,7 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
                     active_sid = state["sid"]
                 log.info("START (sid=%s)", active_sid)
 
-            # 음성 데이터 수집
+            # Collect voice data
             elif ptype == PTYPE_AUDIO:
                 if not input_gate.has_active_stream():
                     log.debug("AUDIO ignored: no active stream")
@@ -430,7 +431,7 @@ def handle_connection(conn, addr, stt_engine: STTEngine, config):
                     log.warning("Buffer too large -> force END")
                     ptype = PTYPE_END
 
-            # 음성 스트림 종료 및 STT 큐에 추가
+            # Handle voice stream end and enqueue to STT queue
             if ptype == PTYPE_END:
                 end_decision = input_gate.end_stream()
                 if end_decision == InputGate.DECISION_IGNORE:
@@ -509,7 +510,7 @@ def main():
     assistant_config = config.get_assistant_config()
     tts_config = config.get_tts_config()
 
-    # 단일 LLM 클라이언트 생성
+    # Create a single shared LLM client
     llm_config = config.get_llm_config()
     ensure_ollama_running(llm_config.get("base_url", "http://localhost:11434"), llm_config)
     llm_client = LLMClient(
@@ -524,7 +525,7 @@ def main():
         llm_client.default_think,
     )
 
-    # 모드별 핸들러 초기화
+    # Initialize mode handlers
     robot_handler = RobotMode(ACTIONS_CONFIG, llm_client)
     agent_handler = AgentMode(
         llm_client,
@@ -538,7 +539,7 @@ def main():
 
     log.info(
         "Assistant: %s (%s)",
-        assistant_config.get("name", "콜리"),
+        assistant_config.get("name", "\ucf5c\ub9ac"),
         assistant_config.get("personality", "witty"),
     )
 

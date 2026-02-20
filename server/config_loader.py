@@ -1,8 +1,8 @@
 """
-설정 관리 모듈
-- config.yaml과 환경 변수를 통합하여 설정 제공
-- 싱글톤 패턴으로 전역 설정 관리
-- 기본값 제공 및 동적 설정 병합
+Configuration management module
+- Provides settings by combining config.yaml and environment variables
+- Manages global settings with a singleton pattern
+- Supplies defaults and merges runtime overrides
 """
 import os
 import yaml
@@ -14,12 +14,12 @@ log = logging.getLogger("config_loader")
 
 class Config:
     """
-    설정 관리 클래스
-    config.yaml과 .env를 읽어서 통합 설정 제공
-    환경 변수가 우선순위 높음
+    Configuration manager class
+    Loads config.yaml and .env and provides merged settings
+    Environment variables have higher priority
     """
     
-    # 기본 설정값 정의 (모든 필수 설정 포함)
+    # Define default settings (includes all required settings)
     DEFAULT_CONFIG = {
         "server": {
             "host": "0.0.0.0",
@@ -93,7 +93,7 @@ class Config:
         log.info("Configuration loaded successfully")
     
     def _load_yaml(self):
-        """config.yaml 파일 로드"""
+        """Load config.yaml file"""
         try:
             if Path(self.config_file).exists():
                 with open(self.config_file, 'r', encoding='utf-8') as f:
@@ -107,9 +107,9 @@ class Config:
             log.error(f"Failed to load {self.config_file}: {e}")
     
     def _load_env(self):
-        """환경 변수 로드 (.env 파일 지원)"""
+        """Load environment variables (supports .env file)"""
         try:
-            # python-dotenv 사용 (있으면)
+            # Use python-dotenv if available
             try:
                 from dotenv import load_dotenv
                 load_dotenv()
@@ -117,7 +117,7 @@ class Config:
             except ImportError:
                 pass
             
-            # 환경 변수 오버라이드
+            # Environment variable overrides
             if "WEATHER_API_KEY" in os.environ:
                 self.config["weather"]["api_key"] = os.environ["WEATHER_API_KEY"]
             
@@ -138,7 +138,7 @@ class Config:
             log.error(f"Failed to load environment variables: {e}")
     
     def _merge_config(self, base: Dict, override: Dict):
-        """딕셔너리를 재귀적으로 병합"""
+        """Recursively merge dictionaries"""
         for key, value in override.items():
             if key in base and isinstance(base[key], dict) and isinstance(value, dict):
                 self._merge_config(base[key], value)
@@ -147,8 +147,8 @@ class Config:
     
     def get(self, *keys, default=None) -> Any:
         """
-        중첩된 키로 값 가져오기
-        예: config.get("server", "port") -> 5001
+        Get a value using nested keys
+        e.g. config.get("server", "port") -> 5001
         """
         value = self.config
         for key in keys:
@@ -159,43 +159,43 @@ class Config:
         return value
     
     def get_server_config(self) -> Dict:
-        """서버 설정 반환"""
+        """Return server settings"""
         return self.config.get("server", {})
     
     def get_stt_config(self) -> Dict:
-        """STT 설정 반환"""
+        """Return STT settings"""
         return self.config.get("stt", {})
     
     def get_llm_config(self) -> Dict:
-        """LLM 설정 반환"""
+        """Return LLM settings"""
         return self.config.get("llm", {})
     
     def get_tts_config(self) -> Dict:
-        """TTS 설정 반환"""
+        """Return TTS settings"""
         return self.config.get("tts", {})
     
     def get_assistant_config(self) -> Dict:
-        """어시스턴트 설정 반환"""
+        """Return assistant settings"""
         return self.config.get("assistant", {})
     
     def get_weather_config(self) -> Dict:
-        """날씨 설정 반환"""
+        """Return weather settings"""
         return self.config.get("weather", {})
     
     def get_context_config(self) -> Dict:
-        """컨텍스트 설정 반환"""
+        """Return context settings"""
         return self.config.get("context", {})
     
     def get_emotion_config(self) -> Dict:
-        """감정 설정 반환"""
+        """Return emotion settings"""
         return self.config.get("emotion", {})
     
     def get_logging_config(self) -> Dict:
-        """로깅 설정 반환"""
+        """Return logging settings"""
         return self.config.get("logging", {})
     
     def save(self, config_file: str = None):
-        """현재 설정을 YAML 파일로 저장"""
+        """Save current settings to a YAML file"""
         file_path = config_file or self.config_file
         try:
             with open(file_path, 'w', encoding='utf-8') as f:
@@ -208,7 +208,7 @@ class Config:
 _config = None
 
 def get_config(config_file: str = "config.yaml") -> Config:
-    """싱글톤 Config 인스턴스 반환"""
+    """Return singleton Config instance"""
     global _config
     if _config is None:
         _config = Config(config_file)

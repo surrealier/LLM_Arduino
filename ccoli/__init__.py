@@ -1,0 +1,2 @@
+"""ccoli CLI package."""
+

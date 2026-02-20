@@ -2,8 +2,16 @@ wav_logs/
 *.wav
 
 *.pyc
-memory/**/
+__pycache__/
+.venv/
+server/.pytest_cache/
+server/context_backup/
+server/logs/
+server/**/__pycache__/
 context*.json
 app_*.log
 error_*.log
 .codex
+.cursor/
+.kiro/
+arduino/atom_echo_m5stack_esp32_ino/device_secrets.h

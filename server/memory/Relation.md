@@ -1,16 +1,16 @@
-# Relation — 사용자의 인간관계
+# Relation Memory Template
 
-## 가족
-(아직 모름)
+## Family
+- none
 
-## 친구
-(아직 모름)
+## Friends
+- none
 
-## 연인
-(아직 모름)
+## Work
+- none
 
-## 동료/직장
-(아직 모름)
+## Pets
+- none
 
-## 반려동물
-(아직 모름)
+## Notes
+- Keep relationship data private in real deployments.

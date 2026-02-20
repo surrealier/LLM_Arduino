@@ -1,73 +1,65 @@
-# LLM Arduino Home Assistant Configuration
+# ccoli server configuration
 
-# Server Settings
 server:
   host: "0.0.0.0"
   port: 5001
 
-# STT (Speech-to-Text) Settings
 stt:
-  model_size: "medium"  # tiny, base, small, medium, large
-  device: "cuda"       # cuda or cpu
+  model_size: "medium"      # tiny, base, small, medium, large
+  device: "cuda"            # cuda or cpu
   language: "ko"
 
-# LLM Settings (Ollama)
 llm:
   base_url: "http://localhost:11434"
   model: "qwen3:8b"
-  think: false  # true/false: Ollama thinking default
+  think: false
+  auto_start: true
+  start_command: "ollama serve"
+  startup_timeout: 10.0
 
-# TTS (Text-to-Speech) Settings
 tts:
-  voice: "ko-KR-SunHiNeural"  # Microsoft Edge TTS voice
-  # Other options: ko-KR-InJoonNeural (male)
+  voice: "ko-KR-SunHiNeural"
 
-# Pet/Assistant Settings
 assistant:
-  name: "콜리"              # Assistant name (브로콜리에서 따옴)
-  personality: "witty"      # JARVIS-style witty home agent
-  proactive: true           # Enable proactive interactions
-  proactive_interval: 600   # Seconds between proactive messages (10 min)
+  name: "ccoli"
+  personality: "witty"
+  proactive: true
+  proactive_interval: 600
 
-# Memory System
+features:
+  robot_mode_enabled: false
+
 memory:
-  refresh_interval: 5       # Refresh memory every N conversations
-  memory_dir: "memory"      # Directory for md memory files
+  refresh_interval: 5
+  memory_dir: "memory"
 
-# Weather Service (OpenWeatherMap)
 weather:
-  api_key: ""               # Get free key from openweathermap.org
-  lat: 37.5665              # 위도 (서울 기본값)
-  lon: 126.9780             # 경도 (서울 기본값)
+  api_key: ""
+  lat: 37.5665
+  lon: 126.9780
 
-# Context Management
 context:
-  max_history: 20           # Number of conversations to keep
-  backup_interval: 10       # Backup every N conversations
+  max_history: 20
+  backup_interval: 10
   auto_save: true
 
-# Emotion System
 emotion:
   enabled: true
   decay_to_neutral: true
-  decay_interval: 300       # Seconds (5 minutes)
+  decay_interval: 300
 
-# Logging
 logging:
-  level: "INFO"             # DEBUG, INFO, WARNING, ERROR
+  level: "INFO"
   save_to_file: true
   log_dir: "logs"
 
-# Connection Settings
 connection:
   socket_timeout: 0.5
 
-# Queue Settings
 queue:
   stt_maxsize: 4
   tts_maxsize: 2
   command_maxsize: 10
 
-# Audio Settings
 audio:
   max_seconds: 12

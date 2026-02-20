@@ -1,35 +1,21 @@
-// Configuration for M5Stack Atom Echo Home Agent
-// Copy this file to config.h and fill in your credentials
-//
-// WiFi/Server 변수는 .ino에서 정의합니다.
-// 이 파일의 extern 선언과 #define 매크로만 config.h에 복사하세요.
+// Copy this file to `config.h`.
+// `config.h` should be versioned; credentials stay in `device_secrets.h`.
 
 #ifndef CONFIG_H
 #define CONFIG_H
 
-// ============================================
-// WiFi Settings (REQUIRED - define in .ino)
-// ============================================
-extern const char* SSID;      // .ino: const char* SSID = "YOUR_WIFI_SSID";
-extern const char* PASS;      // .ino: const char* PASS = "YOUR_WIFI_PASSWORD";
+#include <stdint.h>
 
-// ============================================
-// Server Settings (REQUIRED - define in .ino)
-// ============================================
-extern const char* SERVER_IP;       // .ino: const char* SERVER_IP = "192.168.1.100";
-extern const uint16_t SERVER_PORT;  // .ino: const uint16_t SERVER_PORT = 5001;
+extern const char* SSID;
+extern const char* PASS;
+extern const char* SERVER_IP;
+extern const uint16_t SERVER_PORT;
 
-// ============================================
-// Servo Settings
-// ============================================
 #define SERVO_PIN 25
 #define SERVO_MIN_ANGLE 0
 #define SERVO_MAX_ANGLE 180
 #define SERVO_CENTER_ANGLE 90
 
-// ============================================
-// VAD (Voice Activity Detection) Settings
-// ============================================
 #define VAD_NOISE_ALPHA 0.995f
 #define VAD_ON_MULTIPLIER 3.0f
 #define VAD_OFF_MULTIPLIER 1.8f
@@ -38,24 +24,15 @@ extern const uint16_t SERVER_PORT;  // .ino: const uint16_t SERVER_PORT = 5001;
 #define VAD_MAX_TALK_MS 8000
 #define VAD_INITIAL_NOISE_FLOOR 120.0f
 
-// ============================================
-// Audio Settings
-// ============================================
 #define AUDIO_SAMPLE_RATE 16000
 #define AUDIO_FRAME_SIZE 320
 #define PREROLL_MS 200
-#define AUDIO_RING_BUFFER_SIZE 32768
+#define AUDIO_RING_BUFFER_SIZE 81920
 #define ENABLE_BUTTON_INTERRUPT 1
 
-// ============================================
-// Connection Settings
-// ============================================
 #define WIFI_RECONNECT_INTERVAL_MS 5000
 #define PING_INTERVAL_MS 3000
 
-// ============================================
-// LED Colors (RGB)
-// ============================================
 #define LED_COLOR_CONNECTING_R 255
 #define LED_COLOR_CONNECTING_G 0
 #define LED_COLOR_CONNECTING_B 0
@@ -72,9 +49,6 @@ extern const uint16_t SERVER_PORT;  // .ino: const uint16_t SERVER_PORT = 5001;
 #define LED_COLOR_PLAYING_G 255
 #define LED_COLOR_PLAYING_B 0
 
-// ============================================
-// RX buffer limit (protocol)
-// ============================================
 #define RX_AUDIO_MAX_ALLOC 16384
 
-#endif // CONFIG_H
+#endif  // CONFIG_H

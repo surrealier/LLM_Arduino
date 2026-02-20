@@ -1,10 +1,13 @@
-# Shortterm Memory — 단기 기억
+# Short-term Memory Template
 
-## 최근 대화 요약
-(아직 대화 기록 없음)
+## Latest Summary
+- no active conversation context
 
-## 현재 대화 주제
-(없음)
+## Current Topic
+- none
 
-## 사용자의 현재 상태/기분
-(알 수 없음)
+## User Mood
+- unknown
+
+## Notes
+- This file is reset-safe and contains no personal data.

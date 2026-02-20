@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ccoli"
+version = "0.1.0"
+description = "ccoli CLI for running and configuring the ccoli voice robot stack"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+dependencies = [
+  "PyYAML>=6.0",
+]
+
+[project.scripts]
+ccoli = "ccoli.cli:main"
+colli = "ccoli.cli:main"
+
+[tool.setuptools]
+packages = ["ccoli"]

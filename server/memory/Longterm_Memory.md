@@ -1,10 +1,13 @@
-# Longterm Memory — 장기 기억
+# Long-term Memory Template
 
-## 주요 대화 기록
-(아직 축적된 기억 없음)
+## Persistent Facts
+- none
 
-## 중요 사건/약속
-(없음)
+## Important Events
+- none
 
-## 사용자가 강조한 사항
-(없음)
+## User Priorities
+- none
+
+## Notes
+- Replace with deployment-specific storage if needed.

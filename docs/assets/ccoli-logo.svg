@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
+  <title id="title">ccoli official logo</title>
+  <desc id="desc">Broccoli robot icon with ccoli wordmark and STT TTS LLM tagline.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#effbea"/>
+      <stop offset="100%" stop-color="#d9f6ea"/>
+    </linearGradient>
+    <linearGradient id="leaf" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#57c665"/>
+      <stop offset="100%" stop-color="#2d8f46"/>
+    </linearGradient>
+    <linearGradient id="stem" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#8ed3a4"/>
+      <stop offset="100%" stop-color="#56a678"/>
+    </linearGradient>
+    <linearGradient id="robot" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2f4358"/>
+      <stop offset="100%" stop-color="#162431"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="8" y="8" width="1184" height="344" rx="36" fill="url(#bg)" stroke="#9cd6b2" stroke-width="2"/>
+
+  <g transform="translate(60 55)">
+    <circle cx="120" cy="75" r="42" fill="url(#leaf)"/>
+    <circle cx="70" cy="100" r="48" fill="url(#leaf)"/>
+    <circle cx="120" cy="118" r="56" fill="url(#leaf)"/>
+    <circle cx="172" cy="100" r="48" fill="url(#leaf)"/>
+    <rect x="82" y="130" width="76" height="86" rx="26" fill="url(#stem)"/>
+
+    <rect x="68" y="184" width="108" height="102" rx="28" fill="url(#robot)"/>
+    <rect x="86" y="204" width="72" height="40" rx="12" fill="#f0fff7" opacity="0.96"/>
+    <circle cx="106" cy="224" r="8" fill="#173042"/>
+    <circle cx="138" cy="224" r="8" fill="#173042"/>
+    <rect x="102" y="246" width="40" height="7" rx="4" fill="#6be4b1"/>
+    <circle cx="122" cy="176" r="7" fill="#4ce58f"/>
+    <rect x="118" y="156" width="8" height="22" rx="4" fill="#243748"/>
+  </g>
+
+  <text x="360" y="175" fill="#163526" font-size="132" font-weight="800" font-family="Segoe UI, Arial, sans-serif">ccoli</text>
+  <text x="364" y="236" fill="#2b7152" font-size="34" font-weight="600" font-family="Segoe UI, Arial, sans-serif">Voice Agent Platform</text>
+  <text x="364" y="282" fill="#3b8b66" font-size="28" font-weight="600" font-family="Consolas, Menlo, monospace">STT + TTS + LLM</text>
+</svg>

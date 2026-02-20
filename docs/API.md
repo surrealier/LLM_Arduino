@@ -1,16 +1,48 @@
-# LLM_Arduino Server API
+# ccoli Server API Map
 
-## Server Entry
-- `server/server.py`: 메인 서버 진입점
+This document describes the current runtime entrypoints and key server modules.
 
-## 주요 모듈
-- `server/src/protocol.py`: 패킷 송수신 및 프로토콜 상수
-- `server/src/audio_processor.py`: 오디오 품질/정규화/저장
-- `server/src/stt_engine.py`: Whisper 모델 로딩/추론
-- `server/src/job_queue.py`: STT/TTS/명령 큐 관리
-- `server/src/connection_manager.py`: TCP 연결 수명 관리
-- `server/src/robot_mode.py`: 로봇 명령 파싱/LLM 정제
-- `server/src/agent_mode.py`: 대화/정보/감정/프로액티브 처리
+## Runtime Entry
 
-## 설정
-- `server/config.yaml`과 `.env`로 동작 제어
+- `server/server.py`
+  - Main TCP server process
+  - Handles ESP32 packet I/O, STT pipeline, Agent mode orchestration
+
+## CLI Entry
+
+- `ccoli/cli.py`
+  - `ccoli start`
+  - `ccoli config wifi <WiFi Name> password <password> port <port>`
+
+## Core Modules (`server/src`)
+
+- `server/src/protocol.py`
+  - Packet type constants
+  - Packet encode/decode helpers
+  - CMD/AUDIO_OUT send helpers
+- `server/src/connection_manager.py`
+  - TCP listen/accept loop
+- `server/src/stt_engine.py`
+  - Whisper model load + transcription wrapper
+- `server/src/audio_processor.py`
+  - Audio quality checks, trim, normalization
+- `server/src/agent_mode.py`
+  - Agent response orchestration (LLM/TTS/services)
+- `server/src/robot_mode.py`
+  - Robot command parser (currently gated by feature flag)
+- `server/src/llm_client.py`
+  - Ollama HTTP client wrapper
+- `server/src/input_gate.py`
+  - Stream gating for turn-based processing
+- `server/src/job_queue.py`
+  - Queue utility for STT/TTS command flows
+
+## Configuration Sources
+
+- `server/config.yaml` (primary)
+- `server/.env` (optional overrides, see `server/env.example`)
+
+## Mode Availability
+
+- Agent mode: enabled
+- Robot mode: disabled by default via `features.robot_mode_enabled: false`
